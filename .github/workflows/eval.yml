@@ -1,0 +1,192 @@
+name: "Évaluation automatique — NidBuyer"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Fichiers obligatoires + API ─────────────────────────────────────────────
+  eval-code:
+    name: "Tests auto-évaluation"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt pytest requests -q
+
+      - name: "Fichiers obligatoires (5 pts)"
+        run: |
+          pytest tests/test_auto_eval.py::TestFichiersObligatoires \
+            -v --tb=short --junitxml=results_eval_fichiers.xml
+        continue-on-error: true
+
+      - name: "Tests scoring (10 pts)"
+        run: |
+          pytest tests/test_scoring.py \
+            -v --tb=short --junitxml=results_scoring.xml
+        continue-on-error: true
+
+      - name: "Tests RAG (10 pts)"
+        run: |
+          pytest tests/test_rag.py \
+            -v --tb=short --junitxml=results_rag.xml
+        continue-on-error: true
+
+      - name: "API démarre — /docs + /admin/status (5 pts)"
+        run: |
+          pytest tests/test_auto_eval.py::TestAPIDemarre \
+            -v --tb=short --junitxml=results_eval_api.xml
+        continue-on-error: true
+
+      - name: Fusionner les résultats eval
+        if: always()
+        run: |
+          # Regroupe fichiers + api dans un seul XML pour generate_report.py
+          python3 - <<'EOF'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          combined = ET.Element("testsuites")
+          for f in ["results_eval_fichiers.xml", "results_eval_api.xml"]:
+              if Path(f).exists():
+                  tree = ET.parse(f)
+                  for suite in tree.getroot().iter("testsuite"):
+                      combined.append(suite)
+          ET.ElementTree(combined).write("results_eval.xml")
+          EOF
+
+      - name: Uploader les résultats
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-code
+          path: results_*.xml
+
+  # ── URL déployée ────────────────────────────────────────────────────────────
+  eval-deployment:
+    name: "URL déployée (5 pts)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier l'URL du README
+        run: bash .github/scripts/check_deployment.sh
+        continue-on-error: true
+
+      - name: Écrire résultat XML
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import subprocess, xml.etree.ElementTree as ET
+
+          result = subprocess.run(
+              ["bash", ".github/scripts/check_deployment.sh"],
+              capture_output=True, text=True
+          )
+          suite = ET.Element("testsuite", name="deployment", tests="1",
+                             failures="0" if result.returncode == 0 else "1")
+          case = ET.SubElement(suite, "testcase", classname="deployment",
+                               name="URL déployée répond")
+          if result.returncode != 0:
+              ET.SubElement(case, "failure", message=result.stdout + result.stderr)
+          ET.ElementTree(suite).write("results_deployment.xml")
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-deployment
+          path: results_deployment.xml
+
+  # ── Git hygiene ─────────────────────────────────────────────────────────────
+  eval-prs:
+    name: "Git hygiene / PRs (5 pts)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier les PRs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/check_prs.sh
+        continue-on-error: true
+
+      - name: Écrire résultat XML
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'EOF'
+          import subprocess, os, xml.etree.ElementTree as ET
+
+          env = os.environ.copy()
+          result = subprocess.run(
+              ["bash", ".github/scripts/check_prs.sh"],
+              capture_output=True, text=True, env=env
+          )
+          suite = ET.Element("testsuite", name="prs", tests="1",
+                             failures="0" if result.returncode == 0 else "1")
+          case = ET.SubElement(suite, "testcase", classname="prs",
+                               name="Git hygiene — PRs par membre")
+          if result.returncode != 0:
+              ET.SubElement(case, "failure", message=result.stdout + result.stderr)
+          ET.ElementTree(suite).write("results_prs.xml")
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-prs
+          path: results_prs.xml
+
+  # ── Rapport final ────────────────────────────────────────────────────────────
+  rapport:
+    name: "Rapport de score"
+    runs-on: ubuntu-latest
+    needs: [eval-code, eval-deployment, eval-prs]
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Télécharger tous les résultats
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Générer le rapport
+        run: python3 tests/generate_report.py
+        continue-on-error: true
+
+      - name: Afficher dans le Job Summary
+        if: always()
+        run: |
+          if [ -f evaluation_report.md ]; then
+            cat evaluation_report.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Uploader le rapport
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-report
+          path: evaluation_report.md

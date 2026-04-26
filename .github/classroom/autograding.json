@@ -1,0 +1,64 @@
+{
+  "tests": [
+    {
+      "name": "Fichiers obligatoires (README, EXPERIMENTS.md, APPROACH.md)",
+      "setup": "pip install -r requirements.txt -q",
+      "run": "pytest tests/test_auto_eval.py::TestFichiersObligatoires -v --tb=short",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 60,
+      "points": 5
+    },
+    {
+      "name": "Tests scoring (score_opportunite, fiche_decision)",
+      "setup": "pip install -r requirements.txt -q",
+      "run": "pytest tests/test_scoring.py -v --tb=short",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 60,
+      "points": 10
+    },
+    {
+      "name": "Tests RAG (indexation, recherche sémantique)",
+      "setup": "pip install -r requirements.txt -q",
+      "run": "pytest tests/test_rag.py -v --tb=short",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 120,
+      "points": 10
+    },
+    {
+      "name": "API démarre (/docs + /admin/status)",
+      "setup": "pip install -r requirements.txt -q",
+      "run": "pytest tests/test_auto_eval.py::TestAPIDemarre -v --tb=short",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 60,
+      "points": 5
+    },
+    {
+      "name": "URL déployée répond (200 OK)",
+      "setup": "",
+      "run": "bash .github/scripts/check_deployment.sh",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 30,
+      "points": 5
+    },
+    {
+      "name": "Git hygiene — 1 PR par membre minimum",
+      "setup": "",
+      "run": "bash .github/scripts/check_prs.sh",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 30,
+      "points": 5
+    }
+  ]
+}
