@@ -16,6 +16,14 @@ from pydantic import BaseModel
 from .ingestion import sync
 
 logger = logging.getLogger(__name__)
+
+# ── Configuration Globale Gemini ──────────────────────────────────────────────
+_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+if _api_key:
+    genai.configure(api_key=_api_key)
+else:
+    logger.warning("⚠️ Clé GEMINI_API_KEY introuvable dans l'environnement au démarrage.")
+
 scheduler = AsyncIOScheduler()
 
 
@@ -263,12 +271,10 @@ def chat_ia(req: ChatRequest):
         n_biens_contexte : int
     """
     from .rag import search_similar
-
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY manquant dans .env")
-
-    genai.configure(api_key=api_key)
+        logger.error("🚨 ÉCHEC API CHAT: GEMINI_API_KEY manquant. Vérifiez votre fichier .env.")
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY manquant dans .env. Impossible d'appeler le LLM.")
 
     # ── 1. Extraction du profil acheteur depuis la conversation ───────────────
     history_text = "\n".join(
@@ -415,8 +421,20 @@ def chat_ia(req: ChatRequest):
 # ── Routes stubs (biens individuels) ─────────────────────────────────────────
 
 @app.get("/biens")
-def liste_biens(budget_max: float | None = None, surface_min: float | None = None, quartier: str | None = None):
-    raise HTTPException(status_code=501, detail="Non implémenté")
+def liste_biens(limit: int = 5000):
+    """
+    Récupère l'ensemble des annonces depuis Supabase (limité à 5000 par défaut).
+    Utilisé par le frontend pour générer les statistiques globales du marché.
+    """
+    from supabase import create_client
+    
+    try:
+        sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+        response = sb.table("annonces").select("*").limit(limit).execute()
+        return {"biens": response.data, "total": len(response.data)}
+    except Exception as e:
+        logger.error("Erreur lors de la récupération de tous les biens: %s", e)
+        raise HTTPException(status_code=500, detail="Erreur accès Supabase")
 
 
 @app.get("/biens/{bien_id}")
