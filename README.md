@@ -9,7 +9,7 @@
 
 | Membre | Rôle |
 |--------|------|
-| Prénom NOM | Lead architecture |
+| Axel MOMPER | Lead architecture |
 | Prénom NOM | Backend / RAG |
 | Prénom NOM | Frontend / UX |
 | Prénom NOM | Données / DVF + scoring |
