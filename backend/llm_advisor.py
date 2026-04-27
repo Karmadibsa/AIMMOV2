@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-MODEL      = "gemini-1.5-flash"
+MODEL      = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
 MAX_TOKENS = 520   # ~3 sections Markdown courtes
 
 # ── System Prompt ─────────────────────────────────────────────────────────────

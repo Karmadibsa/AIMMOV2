@@ -305,7 +305,7 @@ def chat_ia(req: ChatRequest):
 
     try:
         extract_model = genai.GenerativeModel(
-            "gemini-1.5-flash",
+            os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
             generation_config=genai.GenerationConfig(
                 temperature=0.1,
                 max_output_tokens=250,
@@ -382,7 +382,7 @@ def chat_ia(req: ChatRequest):
     reponse_text = "Je rencontre une difficulté momentanée. Réessayez dans quelques instants."
     try:
         chat_model = genai.GenerativeModel(
-            "gemini-1.5-flash",
+            os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
             system_instruction=system_chat,
             generation_config=genai.GenerationConfig(max_output_tokens=600, temperature=0.7),
         )
