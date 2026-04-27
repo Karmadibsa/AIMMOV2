@@ -1,0 +1,36 @@
+Voici les informations sur le bien immobilier :
+
+{fiche_structuree}
+
+Annonce originale :
+{description_annonce}
+
+Profil de l'acheteur : {profil}
+
+Avant de répondre, raisonne étape par étape en suivant exactement cette séquence :
+
+<reflexion>
+1. PRIX : Compare le prix/m² au DVF du quartier. L'écart est-il significatif ? Pourquoi ?
+2. PROFIL : Quels sont les critères prioritaires de cet acheteur ? Ce bien y répond-il ?
+3. RISQUES : Quels éléments de l'annonce ou du marché peuvent poser problème ?
+4. NÉGOCIATION : Quel est le prix plancher raisonnable basé sur les données DVF ?
+</reflexion>
+
+Puis réponds UNIQUEMENT dans ce format :
+
+## 🏠 Opportunité
+**Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
+**Verdict** : Sous-évalué / Dans la norme / Surévalué
+
+## ✅ Points forts pour ce profil
+- Point 1 (avec chiffre)
+- Point 2 (avec chiffre)
+
+## ⚠️ Points d'attention
+- Point 1
+- Point 2
+
+## 💡 Recommandation
+**Action** : Acheter / Négocier / Éviter
+**Fourchette de négociation** : entre Xa€ et Xb€
+**Justification** : 2 phrases max, chiffrées

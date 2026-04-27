@@ -1,0 +1,27 @@
+Voici les informations sur le bien immobilier :
+
+{fiche_structuree}
+
+Annonce originale :
+{description_annonce}
+
+Profil de l'acheteur : {profil}
+
+Réponds UNIQUEMENT dans ce format Markdown, sans introduction ni conclusion :
+
+## 🏠 Opportunité
+**Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
+**Verdict** : Sous-évalué / Dans la norme / Surévalué
+
+## ✅ Points forts pour ce profil
+- Point 1 (avec chiffre)
+- Point 2 (avec chiffre)
+
+## ⚠️ Points d'attention
+- Point 1
+- Point 2
+
+## 💡 Recommandation
+**Action** : Acheter / Négocier / Éviter
+**Fourchette de négociation** : entre Xa€ et Xb€
+**Justification** : 2 phrases max, chiffrées
