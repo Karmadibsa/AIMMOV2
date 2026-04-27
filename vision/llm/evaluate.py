@@ -1,49 +1,61 @@
-"""
-Piste LLM multimodal — Analyse des photos via un modèle de vision.
-
-Compatible avec tout modèle acceptant des images en entrée :
-- Claude (claude-opus-4-6, claude-haiku-4-5-20251001...)
-- GPT-4o
-- LLaVA (open source, hébergeable soi-même)
-
-Conseil coût : tester d'abord avec claude-haiku-4-5-20251001 (10x moins cher que opus),
-puis comparer la qualité dans votre APPROACH.md.
-"""
 import os
-import base64
 from pathlib import Path
+from google import genai
+from PIL import Image
 
-# TODO : choisir et implémenter une des options ci-dessous
+def evaluer_photos_gemini(photos: list, model_name: str = "gemma-4-26b-a4b-it") -> str:
+    """
+    Analyse une liste de photos (chemins locaux) via le modèle de vision Gemini.
+    Limite le traitement à 4 photos pour des raisons de coûts.
+    """
+    # Configuration de l'API avec la clé du fichier .env
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("La variable d'environnement GEMINI_API_KEY n'est pas définie dans .env")
+    
+    # Initialisation du nouveau client
+    client = genai.Client(api_key=api_key)
+    
+    prompt = "Voici plusieurs photos d'un bien immobilier. Analyse son état général, identifie les points forts et les éventuels travaux ou défauts visibles. Synthétise ton analyse."
+    
+    # Préparation du contenu (texte + images)
+    content = [prompt]
+    
+    # Limiter à 4 images
+    for photo_path in photos[:4]:
+        try:
+            # Gemini accepte directement les objets PIL.Image
+            img = Image.open(photo_path)
+            content.append(img)
+        except Exception as e:
+            print(f"Erreur lors du chargement de l'image {photo_path}: {e}")
 
-# --- Option A : Claude (Anthropic) ---
-# import anthropic
-#
-# def evaluer_photos_claude(photos: list, model: str = "claude-haiku-4-5-20251001") -> dict:
-#     client = anthropic.Anthropic()
-#     content = []
-#     for photo in photos[:4]:  # limiter pour maîtriser les coûts
-#         ...  # encoder en base64 ou passer une URL
-#     content.append({"type": "text", "text": PROMPT_VISION})
-#     response = client.messages.create(model=model, max_tokens=512, messages=[{"role": "user", "content": content}])
-#     return json.loads(response.content[0].text)
+    try:
+        # Appel à l'API avec la nouvelle syntaxe
+        response = client.models.generate_content(
+            model=model_name,
+            contents=content
+        )
+        return response.text
+    except Exception as e:
+        print(f"Erreur lors de l'appel à l'API Gemini: {e}")
+        return ""
 
-# --- Option B : GPT-4o (OpenAI) ---
-# from openai import OpenAI
-# ...
-
-# --- Option C : LLaVA local (open source) ---
-# import requests
-# ...
-
-PROMPT_VISION = """Analyse ces photos d'un bien immobilier.
-Retourne uniquement du JSON valide, sans texte autour :
-{
-  "etat_general": "excellent"|"bon"|"correct"|"a_renover",
-  "travaux_detectes": ["peinture", "cuisine", ...],
-  "estimation_travaux": "0-5k"|"5-20k"|"20-50k"|">50k",
-  "luminosite": 1-5,
-  "score_presentation": 1-10
-}"""
-
-
-raise NotImplementedError("À implémenter par l'équipe R&D Vision")
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+    
+    # recherche du .env 
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    load_dotenv(env_path)
+    
+    # Mettez un chemin d'image valide pour tester
+    # Assurez-vous que l'image existe bien à cet endroit
+    chemin_image = Path(__file__).resolve().parents[1] / "img" / "cuisine-rénover.webp"
+    
+    images_de_test = [str(chemin_image)]
+    
+    print(f"Lancement de l'analyse avec l'image : {chemin_image}")
+    resultat = evaluer_photos_gemini(images_de_test)
+    
+    print("\n--- Résultat de l'analyse ---")
+    print(resultat)
