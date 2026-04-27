@@ -36,7 +36,7 @@ class LeBonCoinSource(SourceBase):
             "id_source":   str(raw.get("list_id", "")),
             "url_source":  raw.get("url", ""),
             "type":        attrs.get("real_estate_type", ""),
-            "surface":     float(attrs["square") if "square" in attrs else None,
+            "surface":     float(attrs["square"]) if "square" in attrs else None,
             "prix":        float(raw.get("price", [None])[0]) if raw.get("price") else None,
             "quartier":    raw.get("location", {}).get("city_label", ""),
             "ville":       raw.get("location", {}).get("city", "Toulon"),
