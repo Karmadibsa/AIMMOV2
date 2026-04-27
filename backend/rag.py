@@ -354,7 +354,7 @@ if __name__ == "__main__":
     )
 
     print("=" * 60)
-    print("NidBuyer V2 — Indexation ChromaDB depuis Supabase")
+    print("NidBuyer V2 - Indexation ChromaDB depuis Supabase")
     print("=" * 60)
 
     try:
@@ -363,19 +363,19 @@ if __name__ == "__main__":
         print(f"\n[ERREUR] {e}", file=sys.stderr)
         sys.exit(1)
 
-    print("\n" + "─" * 60)
-    print("Test de recherche sémantique…")
+    print("\n" + "-" * 60)
+    print("Test de recherche semantique...")
     requete_test = "appartement avec terrasse proche mer Toulon"
     resultats = search_similar(requete_test, n_results=3)
 
     if resultats:
-        print(f'\nRequête : "{requete_test}"\n')
+        print(f'\nRequete : "{requete_test}"\n')
         for i, r in enumerate(resultats, 1):
             print(
                 f"  #{i}  distance={r['distance']}  "
-                f"{r.get('type_local', '?')} — "
-                f"{r.get('surface', '?')} m² — "
-                f"{r.get('prix', '?')} € — "
+                f"{r.get('type_local', '?')} - "
+                f"{r.get('surface', '?')} m2 - "
+                f"{r.get('prix', '?')} euros - "
                 f"{r.get('quartier', '?')}  DPE:{r.get('dpe', '?')}"
             )
             print(f"       Lien : {r.get('lien', 'n/a')}\n")
