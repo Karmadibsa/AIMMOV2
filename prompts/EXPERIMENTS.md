@@ -25,6 +25,12 @@ Tu aides les acheteurs à prendre des décisions d'achat éclairées en t'appuya
 - Les données DVF (transactions réelles 2024-2026) par quartier
 - Le profil et les objectifs de l'acheteur
 
+Tu connais exactement 4 profils acheteurs et tu adaptes ton analyse en conséquence :
+- RP (Résidence principale) : priorité au calme, confort familial proximité écoles
+- INV (Investissement) : priorité au rendement locatif, quartier attractif à la location — les travaux sont une opportunité de négociation
+- RS (Résidence secondaire) : priorité à la vue mer, proximité plage
+- MIX (Immeuble mixte) : l'acheteur habite une partie et loue le reste — équilibre entre confort personnel et rendement
+
 Tu es factuel, concis, et tu justifies toujours tes recommandations par des données chiffrées.
 Tu ne spécules pas sur l'avenir du marché. Tu ne donnes pas de conseil juridique ou fiscal.
 ```
@@ -144,25 +150,7 @@ Réponds UNIQUEMENT dans ce format Markdown, sans introduction ni conclusion :
 
 ## V3 — Chain-of-thought + intro narrative (2 itérations)
 
-**system.txt** _(enrichi avec les 4 profils)_
-
-```
-Tu es NidBuyer, un conseiller immobilier IA spécialisé sur le marché de Toulon.
-
-Tu aides les acheteurs à prendre des décisions d'achat éclairées en t'appuyant sur :
-- Les vraies annonces du marché toulonnais
-- Les données DVF (transactions réelles 2024-2026) par quartier
-- Le profil et les objectifs de l'acheteur
-
-Tu connais exactement 4 profils acheteurs et tu adaptes ton analyse en conséquence :
-- RP (Résidence principale) : priorité au calme, confort familial, proximité écoles
-- INV (Investissement) : priorité au rendement locatif, quartier attractif à la location — les travaux sont une opportunité de négociation
-- RS (Résidence secondaire) : priorité à la vue mer, proximité plage
-- MIX (Immeuble mixte) : l'acheteur habite une partie et loue le reste — équilibre entre confort personnel et rendement
-
-Tu es factuel, concis, et tu justifies toujours tes recommandations par des données chiffrées.
-Tu ne spécules pas sur l'avenir du marché. Tu ne donnes pas de conseil juridique ou fiscal.
-```
+**system.txt** _(identique à V1)_
 
 **fiche_decision_v3.txt**
 
@@ -244,7 +232,7 @@ Raisonnement internalisé, réécrit sous forme d'un paragraphe d'introduction e
 
 **Analyse :**
 
-- Pourquoi V3 > V1 : le raisonnement interne force le calcul explicite de la valeur médiane (68m² × 3 400 = 231 200€), ce qui ancre la fourchette de négociation dans les données DVF réelles plutôt que dans une estimation vague.
+- Pourquoi V3 > V1 : le raisonnement interne force le modèle à contextualiser l'écart en euros (-16 200€) et non juste en pourcentage (-7%),ce qui rend l'analyse plus concrète pour l'acheteur.
 - Pourquoi V3 > V2 : même format structuré, mais l'intro narrative explique le raisonnement à l'acheteur en langage naturel — il comprend _pourquoi_ c'est une opportunité avant de lire les conclusions.
 - Trade-off : réponse légèrement plus longue (+20% de tokens vs V2), latence marginalement supérieure — largement justifié pour une décision d'achat immobilier.
 
@@ -254,4 +242,4 @@ Raisonnement internalisé, réécrit sous forme d'un paragraphe d'introduction e
 
 Version retenue en production : **V3b**
 
-Raison principale : la chain-of-thought interne force le modèle à raisonner sur 4 axes (prix, profil, risques, négociation) avant de répondre, ce qui produit des justifications chiffrées et traçables. L'intro narrative en langage naturel rend l'analyse accessible à l'acheteur sans jargon technique. Le système prompt enrichi avec les 4 profils (RP, INV, RS, MIX) garantit une analyse automatiquement adaptée au contexte de chaque acheteur. Ce format combine la rigueur analytique de la V3 et la lisibilité de la V2 — c'est le meilleur des deux mondes.
+Raison principale : la chain-of-thought interne force le modèle à raisonner sur 4 axes (prix, profil, risques, négociation) avant de répondre, ce qui produit des justifications chiffrées et traçables. L'intro narrative en langage naturel rend l'analyse accessible à l'acheteur sans jargon technique. Le système prompt enrichi avec les 4 profils (RP, INV, RS, MIX) garantit une analyse automatiquement adaptée au contexte de chaque acheteur. Ce format combine la rigueur analytique de la V3 et la lisibilité de la V2.
