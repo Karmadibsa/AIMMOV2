@@ -32,7 +32,7 @@ description = """
 Bel appartement lumineux, cuisine rénovée, balcon vue mer partielle, proximité plage du Mourillon.
 """
 
-profil = "Investisseur locatif"
+profil = "Investissement"
 
 # Injecter les variables
 final_prompt = user_prompt.format(

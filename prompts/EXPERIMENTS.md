@@ -9,13 +9,14 @@ Comparaison de **3 versions** du system prompt sur le **même bien de référenc
 > **T3, 68m², Mourillon, 215 000€**
 > Description : "Bel appartement lumineux, cuisine rénovée, balcon vue mer partielle, proximité plage du Mourillon."
 > DVF quartier Mourillon : médiane 3 400 €/m² → bien à 3 162 €/m², soit **-7%**
-> Profil testé : Investisseur, budget 250 000€
+> Profil testé : Investisseur locatif (INV), budget 250 000€
 
 ---
 
 ## V1 — Prompt basique
 
 **system.txt**
+
 ```
 Tu es NidBuyer, un conseiller immobilier IA spécialisé sur le marché de Toulon.
 
@@ -29,6 +30,7 @@ Tu ne spécules pas sur l'avenir du marché. Tu ne donnes pas de conseil juridiq
 ```
 
 **fiche_decision.txt**
+
 ```
 Voici les informations sur le bien immobilier :
 
@@ -51,29 +53,35 @@ Sois direct et factuel. Utilise les données chiffrées fournies.
 **Réponse obtenue sur le bien de référence :**
 
 > **1. Opportunité**
-> Le bien est affiché à 3 162€/m², soit 7% sous la médiane DVF du Mourillon (3 400€/m²). C'est un prix attractif.
+> L'opportunité est réelle. Le prix au m² (3 162 €) affiche une décote de 7 % par rapport à la médiane du quartier Mourillon (3 400 €/m²). Cette sous-évaluation par rapport au marché local constitue un levier immédiat pour un investisseur.
 >
 > **2. Points forts**
-> - Prix sous le marché, marge de négociation possible
-> - Cuisine rénovée, moins de travaux immédiats
-> - Localisation Mourillon, quartier recherché à Toulon
+>
+> - **Emplacement à haute demande** : La proximité de la plage du Mourillon garantit une vacance locative minimale et une attractivité constante pour la location saisonnière ou longue durée.
+> - **Valorisation locative** : La cuisine déjà rénovée et la présence d'un balcon avec vue mer partielle sont des caractéristiques qui permettent de viser le haut de la fourchette des loyers du secteur.
 >
 > **3. Points d'attention**
-> - "Vue mer partielle" peut limiter la valorisation locative
-> - Rendement locatif non calculable sans données de loyers du secteur
+>
+> - **Limitation de la vue** : La vue mer étant "partielle", le bien ne pourra pas prétendre aux loyers premium des biens avec vue panoramique totale.
+> - **État de l'immeuble** : L'annonce met en avant la cuisine, mais il est crucial de vérifier l'état général des parties communes et les derniers appels de fonds de copropriété.
 >
 > **4. Recommandation**
-> Achat ou négociation. Le prix sous la médiane offre une marge de 3-5%. Budget compatible (215k < 250k).
+> **Négociation (fourchette : 205 000 € - 210 000 €).**
+> Bien que le prix soit déjà attractif (-7 %), une négociation permettrait d'optimiser le rendement locatif initial et de compenser d'éventuels travaux de rafraîchissement mineurs.
 
 **Analyse :**
-- Ce qui fonctionne : structuré, factuel, concis
-- Ce qui manque : pas de raisonnement visible, conseil trop générique, pas assez adapté au profil investisseur, pas de fourchette de négociation en euros
+
+- Ce qui fonctionne : structuré, factuel, fourchette en euros présente
+- Ce qui manque : format libre (l'IA choisit sa mise en forme), pas de raisonnement visible, difficile à intégrer de manière fiable dans une interface
 
 ---
 
 ## V2 — Format de sortie structuré
 
-**fiche_decision.txt** *(system.txt identique à V1)*
+**system.txt** _(identique à V1)_
+
+**fiche_decision_v2.txt**
+
 ```
 Voici les informations sur le bien immobilier :
 
@@ -107,31 +115,57 @@ Réponds UNIQUEMENT dans ce format Markdown, sans introduction ni conclusion :
 **Réponse obtenue sur le bien de référence :**
 
 > ## 🏠 Opportunité
+>
 > **Prix/m²** : 3 162 €/m² vs médiane quartier 3 400 €/m² → écart : -7%
 > **Verdict** : Sous-évalué
 >
-> ## ✅ Points forts pour ce profil (Investisseur)
-> - Prix 7% sous la médiane = marge de négociation immédiate de 3-5%
-> - Cuisine rénovée = pas de travaux à prévoir, mise en location rapide
+> ## ✅ Points forts pour ce profil
+>
+> - Localisation Mourillon à très forte demande locative
+> - Prix d'acquisition déjà inférieur de 7% à la médiane du quartier
 >
 > ## ⚠️ Points d'attention
-> - Vue mer "partielle" → loyer plafonné, moins attractif qu'un bien vue mer totale
-> - Pas de données de loyers disponibles pour calculer le rendement brut
+>
+> - Vue mer "partielle" (limite le plafond de loyer par rapport à une vue totale)
+> - Cuisine déjà rénovée (réduit le levier de négociation classique par les travaux)
 >
 > ## 💡 Recommandation
+>
 > **Action** : Négocier
-> **Fourchette de négociation** : entre 204 000€ et 208 000€
-> **Justification** : Le bien est déjà sous la médiane DVF. Une offre à -5% reste justifiable par les données du marché et l'absence de vue mer franche.
+> **Fourchette de négociation** : entre 204 000€ et 209 000€
+> **Justification** : L'objectif est de descendre sous la barre des 3 050 €/m² pour maximiser le rendement brut. La cuisine étant déjà rénovée, la négociation doit porter sur l'absence d'autres travaux visibles ou sur l'écart de prix constaté.
 
 **Analyse :**
-- Ce qui s'est amélioré : format lisible, chiffres précis, fourchette de négociation en euros, verdict clair
-- Ce qui reste perfectible : l'IA donne des conclusions sans montrer son raisonnement
+
+- Ce qui s'est amélioré : format strictement respecté, facile à intégrer dans l'interface, verdict clair, fourchette précise
+- Ce qui reste perfectible : l'IA donne des conclusions sans montrer son raisonnement — on ne sait pas pourquoi elle arrive à ces chiffres. L'acheteur reçoit des conclusions sans comprendre le "pourquoi".
 
 ---
 
-## V3 — Chain-of-thought
+## V3 — Chain-of-thought + intro narrative (2 itérations)
 
-**fiche_decision.txt** *(system.txt identique à V1)*
+**system.txt** _(enrichi avec les 4 profils)_
+
+```
+Tu es NidBuyer, un conseiller immobilier IA spécialisé sur le marché de Toulon.
+
+Tu aides les acheteurs à prendre des décisions d'achat éclairées en t'appuyant sur :
+- Les vraies annonces du marché toulonnais
+- Les données DVF (transactions réelles 2024-2026) par quartier
+- Le profil et les objectifs de l'acheteur
+
+Tu connais exactement 4 profils acheteurs et tu adaptes ton analyse en conséquence :
+- RP (Résidence principale) : priorité au calme, confort familial, proximité écoles
+- INV (Investissement) : priorité au rendement locatif, quartier attractif à la location — les travaux sont une opportunité de négociation
+- RS (Résidence secondaire) : priorité à la vue mer, proximité plage
+- MIX (Immeuble mixte) : l'acheteur habite une partie et loue le reste — équilibre entre confort personnel et rendement
+
+Tu es factuel, concis, et tu justifies toujours tes recommandations par des données chiffrées.
+Tu ne spécules pas sur l'avenir du marché. Tu ne donnes pas de conseil juridique ou fiscal.
+```
+
+**fiche_decision_v3.txt**
+
 ```
 Voici les informations sur le bien immobilier :
 
@@ -142,16 +176,18 @@ Annonce originale :
 
 Profil de l'acheteur : {profil}
 
-Avant de répondre, raisonne étape par étape en suivant exactement cette séquence :
+Raisonne en interne sur ces 4 axes avant de répondre :
+1. PRIX : L'écart au DVF est-il significatif ? Calcule la valeur médiane en € (surface × médiane/m²)
+2. PROFIL : Les critères prioritaires de ce profil sont-ils satisfaits ?
+3. RISQUES : Quels éléments de l'annonce peuvent cacher un problème ?
+4. NÉGOCIATION : Quel prix plancher est défendable avec les données DVF ?
 
-<reflexion>
-1. PRIX : Compare le prix/m² au DVF du quartier. L'écart est-il significatif ? Pourquoi ?
-2. PROFIL : Quels sont les critères prioritaires de cet acheteur ? Ce bien y répond-il ?
-3. RISQUES : Quels éléments de l'annonce ou du marché peuvent poser problème ?
-4. NÉGOCIATION : Quel est le prix plancher raisonnable basé sur les données DVF ?
-</reflexion>
+Puis réponds dans ce format exact :
 
-Puis réponds UNIQUEMENT dans ce format :
+[Un paragraphe d'introduction de 2-3 phrases en langage naturel,
+sans titre ni bullet points, qui mentionne obligatoirement :
+- le prix/m² et l'écart à la médiane en % ET en €
+- ce que ça implique concrètement pour le profil de l'acheteur]
 
 ## 🏠 Opportunité
 **Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
@@ -171,43 +207,51 @@ Puis réponds UNIQUEMENT dans ce format :
 **Justification** : 2 phrases max, chiffrées
 ```
 
+### Itération V3a — réflexion visible
+
+Première tentative avec les balises `<reflexion>` affichées dans la réponse. La chaîne de raisonnement apparaissait telle quelle, ce qui n'est pas adapté à une interface utilisateur.
+
+> La réflexion était visible mais encombrante — le raisonnement était bon mais la mise en forme inappropriée pour l'affichage final.
+
+### Itération V3b — intro narrative (version finale)
+
+Raisonnement internalisé, réécrit sous forme d'un paragraphe d'introduction en langage naturel pour l'acheteur.
+
 **Réponse obtenue sur le bien de référence :**
 
-> <reflexion>
-> 1. **PRIX** : Le bien est à 3 162€/m² vs médiane DVF Mourillon à 3 400€/m². Écart de -7%, soit 238€/m² sous le marché. Sur 68m², ça représente 16 184€ de moins que la valeur médiane. C'est significatif et objectivement justifiable auprès du vendeur.
->
-> 2. **PROFIL** : Investisseur, budget 250k. Critères prioritaires : rendement locatif, faible besoin de travaux, quartier attractif pour la location. La cuisine rénovée coche la case "pas de travaux immédiats". Le Mourillon est le quartier le plus recherché de Toulon à la location.
->
-> 3. **RISQUES** : "Vue mer partielle" est un argument marketing flou — à vérifier sur place. Sans données de loyers du secteur, le rendement brut est incalculable précisément. Risque de surestimer l'attractivité locative.
->
-> 4. **NÉGOCIATION** : Médiane DVF à 3 400€/m². Le bien est déjà à -7%. Une offre à -5% supplémentaire soit 204 000€ reste défendable. Plancher absolu : 200 000€ (-7% sur le prix affiché).
-> </reflexion>
+> Ce bien s'affiche à 3 162 €/m², soit une décote de 7% (-16 200 €) par rapport à la médiane du quartier. Pour un profil investisseur, cette différence de prix constitue un levier immédiat pour optimiser le rendement locatif et sécuriser la rentabilité de l'opération.
 >
 > ## 🏠 Opportunité
+>
 > **Prix/m²** : 3 162 €/m² vs médiane quartier 3 400 €/m² → écart : -7%
 > **Verdict** : Sous-évalué
 >
-> ## ✅ Points forts pour ce profil (Investisseur)
-> - Bien déjà 16 184€ sous la valeur médiane DVF → levier de négociation immédiat
-> - Cuisine rénovée → mise en location possible sans travaux, rendement dès l'achat
+> ## ✅ Points forts
+>
+> - Économie immédiate de 16 200 € par rapport à la valeur médiane du secteur
+> - Emplacement à haute tension locative (proximité plage du Mourillon)
 >
 > ## ⚠️ Points d'attention
-> - "Vue mer partielle" à vérifier sur place — impact direct sur le loyer potentiel
-> - Rendement brut non calculable sans données de loyers Mourillon
+>
+> - État de l'appartement hors cuisine (vérifier le besoin de travaux pour maintenir le rendement)
+> - Vue mer "partielle" qui peut limiter la prime de loyer par rapport à une vue totale
 >
 > ## 💡 Recommandation
+>
 > **Action** : Négocier
-> **Fourchette de négociation** : entre 200 000€ et 204 000€
-> **Justification** : Le bien est déjà sous la médiane DVF. La cuisine rénovée limite les travaux mais l'absence de vraie vue mer justifie une pression supplémentaire de 3-5% sur le prix affiché.
+> **Fourchette de négociation** : entre 205 000 € et 210 000 €
+> **Justification** : Viser 208 000 € permettrait de porter la décote à environ 10% de la médiane. Cela offre une marge de sécurité financière pour d'éventuels travaux de mise aux normes.
 
 **Analyse :**
-- Pourquoi V3 > V1 : le raisonnement est visible et traçable, les chiffres sont contextualisés (16 184€ sous la médiane vs juste "-7%"), les risques sont nuancés
-- Trade-off : réponse plus longue (+30%), coût en tokens plus élevé, latence légèrement supérieure — justifié pour une décision d'achat immobilier
+
+- Pourquoi V3 > V1 : le raisonnement interne force le calcul explicite de la valeur médiane (68m² × 3 400 = 231 200€), ce qui ancre la fourchette de négociation dans les données DVF réelles plutôt que dans une estimation vague.
+- Pourquoi V3 > V2 : même format structuré, mais l'intro narrative explique le raisonnement à l'acheteur en langage naturel — il comprend _pourquoi_ c'est une opportunité avant de lire les conclusions.
+- Trade-off : réponse légèrement plus longue (+20% de tokens vs V2), latence marginalement supérieure — largement justifié pour une décision d'achat immobilier.
 
 ---
 
 ## Conclusion
 
-Version retenue en production : **V3**
+Version retenue en production : **V3b**
 
-Raison principale : la chain-of-thought produit des analyses plus précises et mieux adaptées au profil acheteur, ce qui est critique pour une décision d'achat immobilier. Le surcoût en tokens est acceptable au vu de la qualité du conseil.
+Raison principale : la chain-of-thought interne force le modèle à raisonner sur 4 axes (prix, profil, risques, négociation) avant de répondre, ce qui produit des justifications chiffrées et traçables. L'intro narrative en langage naturel rend l'analyse accessible à l'acheteur sans jargon technique. Le système prompt enrichi avec les 4 profils (RP, INV, RS, MIX) garantit une analyse automatiquement adaptée au contexte de chaque acheteur. Ce format combine la rigueur analytique de la V3 et la lisibilité de la V2 — c'est le meilleur des deux mondes.
