@@ -63,7 +63,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🎯 Filtres")
 
-    types_dispo = sorted(df_raw["type_local"].dropna().unique()) if not df_raw.empty else []
+    types_dispo = sorted(df_raw["type_bien"].dropna().unique()) if not df_raw.empty else []
     type_filtre = st.selectbox("Type de bien", ["Tous"] + list(types_dispo))
 
     budget_max = st.slider("Budget max (€)", 50_000, 500_000, 500_000, 10_000, format="%d €")
@@ -110,7 +110,7 @@ if df_raw.empty:
 # ── Filtrage ───────────────────────────────────────────────────────────────────
 df = df_raw.copy()
 if type_filtre != "Tous":
-    df = df[df["type_local"] == type_filtre]
+    df = df[df["type_bien"] == type_filtre]
 if budget_max < 500_000:
     df = df[df["valeur_fonciere"] <= budget_max]
 if surface_min > 0:
@@ -132,7 +132,7 @@ if prix_baisse_only and "prix_baisse" in df.columns:
 
 # ── Régressions ────────────────────────────────────────────────────────────────
 df_scored = (
-    compute_regression(df[df["type_local"].notna()].copy().reset_index(drop=True))
+    compute_regression(df[df["type_bien"].notna()].copy().reset_index(drop=True))
     if not df.empty else pd.DataFrame()
 )
 if (not df_scored.empty and "ecart_pct" in df_scored.columns
@@ -141,11 +141,11 @@ if (not df_scored.empty and "ecart_pct" in df_scored.columns
     df = df.merge(_reg_cols, on="url", how="left", suffixes=("", "_reg")).reset_index(drop=True)
 
 df_dvf = (
-    compute_dvf_scores(df[df["type_local"].notna()].copy().reset_index(drop=True), models=dvf_models)
+    compute_dvf_scores(df[df["type_bien"].notna()].copy().reset_index(drop=True), models=dvf_models)
     if not df.empty else pd.DataFrame()
 )
 df_qrt = (
-    compute_neighborhood_scores(df[df["type_local"].notna()].copy().reset_index(drop=True))
+    compute_neighborhood_scores(df[df["type_bien"].notna()].copy().reset_index(drop=True))
     if not df.empty else pd.DataFrame()
 )
 

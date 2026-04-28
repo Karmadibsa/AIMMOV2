@@ -16,9 +16,9 @@ print(f"\n2. NOMBRE DE LIGNES : {len(df)}")
 # 3. Exemple de 5 lignes
 print("\n3. EXEMPLE DE 5 PREMIÈRES LIGNES :")
 colonnes_importantes = ['valeur_fonciere', 'surface_reelle_bati']
-# Ajouter type_local si existe
-if 'type_local' in df.columns:
-    colonnes_importantes.append('type_local')
+# Ajouter type_bien si existe
+if 'type_bien' in df.columns:
+    colonnes_importantes.append('type_bien')
 if 'nature_mutation' in df.columns:
     colonnes_importantes.append('nature_mutation')
 if 'nombre_pieces_principales' in df.columns:
@@ -29,11 +29,11 @@ if 'code_commune' in df.columns:
 print(df[colonnes_importantes].head(5))
 
 # 4. Types de biens (si existe)
-if 'type_local' in df.columns:
+if 'type_bien' in df.columns:
     print("\n4. RÉPARTITION PAR TYPE DE BIEN :")
-    print(df['type_local'].value_counts())
+    print(df['type_bien'].value_counts())
 else:
-    print("\n4. ⚠️  Colonne 'type_local' absente")
+    print("\n4. ⚠️  Colonne 'type_bien' absente")
 
 # 5. Statistiques prix
 print("\n5. STATISTIQUES VALEUR FONCIÈRE :")

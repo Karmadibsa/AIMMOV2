@@ -37,7 +37,7 @@ def _popup_html(row: pd.Series) -> str:
     pm2     = row.get("prix_m2")
     ep      = row.get("ecart_pct") or row.get("dvf_ecart_pct")
     url     = row.get("url", "")
-    ttype   = row.get("type_local", "")
+    ttype   = row.get("type_bien", "")
     commune = row.get("nom_commune", "")
 
     prix_str    = f"{prix:,.0f} €"    if pd.notna(prix)    else "—"

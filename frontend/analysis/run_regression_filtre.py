@@ -30,7 +30,7 @@ def analyser_type_bien(df, type_bien, prix_m2_min, prix_m2_max):
     print("=" * 70)
     
     # Filtrer par type
-    df_type = df[df['type_local'] == type_bien].copy()
+    df_type = df[df['type_bien'] == type_bien].copy()
     print(f"\n📊 {len(df_type)} {type_bien.lower()}s dans les données")
     
     if len(df_type) < 50:
@@ -145,8 +145,8 @@ print(f"   ✅ {len(df)} transactions chargées")
 
 # Répartition
 print("\n📊 Répartition des types de biens :")
-print(f"   • Appartements : {len(df[df['type_local'] == 'Appartement'])}")
-print(f"   • Maisons      : {len(df[df['type_local'] == 'Maison'])}")
+print(f"   • Appartements : {len(df[df['type_bien'] == 'Appartement'])}")
+print(f"   • Maisons      : {len(df[df['type_bien'] == 'Maison'])}")
 
 # Analyse APPARTEMENTS
 resultats_apparts = analyser_type_bien(

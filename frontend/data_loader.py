@@ -25,7 +25,7 @@ SUPABASE_COL_MAP: dict[str, str] = {
     "surface":   "surface_reelle_bati",
     "pieces":    "nombre_pieces_principales",
     "quartier":  "nom_commune",
-    "type_bien": "type_local",
+    "type_bien": "type_bien",
     # "titre", "source", "description" gardent leur nom
 }
 
@@ -87,8 +87,8 @@ def _process(df: pd.DataFrame) -> pd.DataFrame:
     """Nettoyage et enrichissement communs (Supabase ou CSV)."""
 
     # Filtre : types de bien pertinents uniquement (exclut Programme, terrain, etc.)
-    if "type_local" in df.columns:
-        df = df[df["type_local"].isin(["Appartement", "Maison"])].copy()
+    if "type_bien" in df.columns:
+        df = df[df["type_bien"].isin(["Appartement", "Maison"])].copy()
 
     # Conversion numérique
     for col in ("valeur_fonciere", "surface_reelle_bati", "nombre_pieces_principales"):
@@ -139,7 +139,7 @@ def load_dvf_raw(dvf_csv_path: str = str(DVF_CSV_PATH)) -> pd.DataFrame:
     Charge le fichier DVF brut filtré sur 2024-2025 pour les graphes de tendance.
 
     Retourne un DataFrame avec au minimum :
-        date_mutation, type_local, valeur_fonciere, surface_reelle_bati,
+        date_mutation, type_bien, valeur_fonciere, surface_reelle_bati,
         prix_m2, nature_mutation.
 
     En cas d'erreur (fichier absent, colonnes manquantes), retourne un DataFrame vide.
@@ -189,7 +189,7 @@ def get_dvf_models(dvf_csv_path: str = str(DVF_CSV_PATH)) -> dict:
         models: dict = {}
         for ttype, (lo, hi) in DVF_PM2_FILTERS.items():
             sub = df[
-                (df["type_local"] == ttype)
+                (df["type_bien"] == ttype)
                 & (df["nature_mutation"] == "Vente")
                 & (df["surface_reelle_bati"] > 10)
                 & (df["prix_m2"] >= lo)

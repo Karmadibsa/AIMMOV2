@@ -3,7 +3,13 @@ Constantes globales de l'application NidDouillet by AImmo.
 Toutes les valeurs statiques (URLs, chemins, dictionnaires) sont ici.
 """
 
+import os
 from pathlib import Path
+
+# ── Backend URL ────────────────────────────────────────────────────────────────
+# En production (Streamlit Cloud) : définir BACKEND_URL dans les secrets.
+# En développement local : fallback sur localhost:8000.
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
 
 # ── URLs & Chemins ──────────────────────────────────────────────────────────────
 GITHUB_RAW_URL = (

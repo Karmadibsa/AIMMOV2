@@ -122,7 +122,7 @@ def render_opportunities(
     COLORS_TYPE = {"Appartement": "#E8714A", "Maison": "#1B2B4B"}
     fig_reg = go.Figure()
 
-    for ttype, grp in _df_ref.groupby("type_local"):
+    for ttype, grp in _df_ref.groupby("type_bien"):
         c = COLORS_TYPE.get(ttype, "#8B5CF6")
         _dropna_cols = [col for col in [_col_slope, _col_inter, "surface_reelle_bati", "valeur_fonciere"] if col is not None]
         grp_valid = grp.dropna(subset=_dropna_cols)
@@ -221,7 +221,7 @@ def render_opportunities(
         st.markdown("#### 📋 Tableau des opportunités")
         if not df_opps.empty:
             COLS_OPP = {
-                "titre": "Titre", "type_local": "Type",
+                "titre": "Titre", "type_bien": "Type",
                 "valeur_fonciere": "Prix réel (€)", _col_pp: "Prix attendu (€)",
                 _col_e: "Économie (€)", _col_ep: "Écart (%)",
                 "surface_reelle_bati": "Surface (m²)", "url": "Lien",
@@ -252,7 +252,7 @@ def render_opportunities(
         st.markdown("---")
         st.markdown("#### 📥 Exporter les opportunités du jour")
         _export_cols = {
-            "titre": "Titre", "type_local": "Type",
+            "titre": "Titre", "type_bien": "Type",
             "valeur_fonciere": "Prix réel (€)", _col_pp: "Prix attendu (€)",
             _col_e: "Économie (€)", _col_ep: "Écart (%)",
             "surface_reelle_bati": "Surface (m²)",
@@ -324,7 +324,7 @@ def render_opportunities(
                         )
                     for icon_lbl, val in [
                         ("🏷️ Source",  source),
-                        ("🏠 Type",    row.get("type_local", "—")),
+                        ("🏠 Type",    row.get("type_bien", "—")),
                         ("📐 Surface", f"{surface:.0f} m²" if pd.notna(surface) else "—"),
                         ("🚪 Pièces",  f"{int(row['nombre_pieces_principales'])}"
                          if pd.notna(row.get("nombre_pieces_principales")) else "—"),
