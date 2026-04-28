@@ -10,21 +10,21 @@
 | Membre | Rôle |
 |--------|------|
 | Axel MOMPER | Lead architecture |
-| Prénom NOM | Backend / RAG |
-| Prénom NOM | Frontend / UX |
-| Prénom NOM | Données / DVF + scoring |
-| Prénom NOM | Prompt engineering |
+| Axel MOMPER | Backend / RAG |
+| Axel MOMPER et Benoit MOLLENS | Frontend / UX |
+| Julie VANWEYDEVELDT et Mathis MICHEAU | Données / DVF + scoring |
+| Julie VANWEYDEVELDT | Prompt engineering |
 
 ### Pôle R&D Vision
 
 | Membre | Rôle |
 |--------|------|
-| Prénom NOM | Approche & dataset |
-| Prénom NOM | Entraînement / évaluation |
+| Robin PETIT et Mathis MICHEAU | Approche & dataset |
+| Robin PETIT et Mathis MICHEAU| Entraînement / évaluation |
 
 ## Demo
 
-URL déployée : **https://TODO**
+URL déployée : **https://aimmo-project-immo.streamlit.app/**
 
 ## Pourquoi NidBuyer ?
 
