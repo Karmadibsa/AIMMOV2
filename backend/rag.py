@@ -139,6 +139,7 @@ def _build_metadata(annonce: dict) -> dict:
 
     return {
         # ── Identification ──────────────────────────────────────────────────
+        "id":         _s(annonce.get("id")),
         "lien":       _s(annonce.get("lien")),
         "titre":      _s(annonce.get("titre")),
         "source":     _s(annonce.get("source")),

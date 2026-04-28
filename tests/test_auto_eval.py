@@ -76,10 +76,9 @@ def api_process():
     env = os.environ.copy()
     env.update({
         "ANTHROPIC_API_KEY": "sk-ant-test-00000000",
-        "GEMINI_API_KEY":    "test-gemini-key-00000000",
-        "SUPABASE_URL":      "https://placeholder.supabase.co",
-        "SUPABASE_KEY":      "placeholder-key",
-        "CHROMA_PATH":       "/tmp/chroma_autoeval",
+        "SUPABASE_URL": "https://placeholder.supabase.co",
+        "SUPABASE_KEY": "placeholder-key",
+        "CHROMA_PATH": "/tmp/chroma_autoeval",
     })
     proc = subprocess.Popen(
         ["uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "18765",
@@ -89,8 +88,7 @@ def api_process():
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    # SentenceTransformer se charge au 1er appel (lazy) — uvicorn répond dès le démarrage
-    time.sleep(8)
+    time.sleep(5)
     yield proc
     proc.terminate()
     proc.wait()
@@ -116,9 +114,8 @@ class TestAPIDemarre:
         resp = requests.get("http://127.0.0.1:18765/admin/status", timeout=6)
         assert resp.status_code == 200, f"/admin/status retourne {resp.status_code}"
         data = resp.json()
-        # Accepte 'annonces_indexees' (alias) ou 'chromadb_count' (nom technique)
-        assert "annonces_indexees" in data or "chromadb_count" in data, (
-            "/admin/status doit contenir 'annonces_indexees' ou 'chromadb_count'"
+        assert "annonces_indexees" in data, (
+            "/admin/status doit contenir 'annonces_indexees'"
         )
 
     def test_admin_status_champ_derniere_sync(self, api_process):
