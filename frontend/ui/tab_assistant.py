@@ -45,7 +45,7 @@ def post_chat(question: str, history: list[dict], n_context: int = 5) -> dict:
         r = requests.post(
             f"{API_URL}/api/chat",
             json={"question": question, "history": history, "n_context": n_context},
-            timeout=45,
+            timeout=90,
         )
         r.raise_for_status()
         return r.json()
@@ -64,7 +64,7 @@ def post_chat(question: str, history: list[dict], n_context: int = 5) -> dict:
         }
 
 
-def render_assistant(df_scored: pd.DataFrame) -> None:
+def render_assistant(df_scored: pd.DataFrame, user_role: str = "rp") -> None:
     st.markdown("### 🤖 Assistant IA NidBuyer")
     st.markdown(
         "Discutez avec votre agent immobilier intelligent. Il interroge la base de données "
@@ -82,6 +82,28 @@ def render_assistant(df_scored: pd.DataFrame) -> None:
                 ),
             }
         ]
+
+    # Traitement automatique d'une analyse lancée depuis la liste des biens
+    _pending       = st.session_state.pop("pending_analysis",       None)
+    _pending_label = st.session_state.pop("pending_analysis_label", None)
+    if _pending:
+        # Historique API = messages existants AVANT d'ajouter le nouveau
+        _api_history = [
+            {"role": m["role"], "content": m["content"]}
+            for m in st.session_state.chat_history
+        ]
+        # Affiché dans le chat : message court lisible
+        _display = _pending_label or "🔍 Analyse de bien immobilier"
+        st.session_state.chat_history.append({"role": "user", "content": _display})
+        # Envoyé à l'API : prompt complet fiche_decision_v3
+        with st.spinner("NidBuyer analyse ce bien…"):
+            _result = post_chat(_pending, _api_history, n_context=3)
+        _reponse = _clean_response(_result.get("reponse", "Erreur inattendue."))
+        st.session_state.chat_history.append({
+            "role": "assistant",
+            "content": _reponse,
+            "biens_trouves": _result.get("biens_trouves", []),
+        })
 
     st.markdown(
         '<div class="chat-wrap" style="max-width: 800px; margin: 0 auto; padding: 20px; '

@@ -46,11 +46,25 @@ df_raw     = load_data()
 dvf_models = get_dvf_models(str(DVF_CSV_PATH))
 df_dvf_raw = load_dvf_raw(str(DVF_CSV_PATH))
 
-# ── Session state — Assistant ──────────────────────────────────────────────────
+# ── Session state ─────────────────────────────────────────────────────────────
 for _k, _v in [("asst_step", 0), ("asst_type", None),
-               ("asst_budget", None), ("asst_surface", None)]:
+               ("asst_budget", None), ("asst_surface", None),
+               ("user_role", "rp"), ("chat_history", None)]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
+
+_ROLE_LABELS = [
+    "Résidence Principale (RP)",
+    "Investissement (INV)",
+    "Résidence Secondaire (RS)",
+    "Immeuble Mixte (MIX)",
+]
+_ROLE_CODES = {
+    "Résidence Principale (RP)": "rp",
+    "Investissement (INV)":      "investissement",
+    "Résidence Secondaire (RS)": "rs",
+    "Immeuble Mixte (MIX)":      "mixte",
+}
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -60,6 +74,18 @@ with st.sidebar:
         'by AImmo</span>',
         unsafe_allow_html=True,
     )
+    st.markdown("---")
+
+    # ── Sélecteur de rôle acheteur ────────────────────────────────────────────
+    st.markdown("### 🧑 Profil d'Acheteur")
+    _role_label = st.radio(
+        "Votre Profil d'Acheteur",
+        _ROLE_LABELS,
+        label_visibility="collapsed",
+        key="user_role_radio",
+    )
+    st.session_state["user_role"] = _ROLE_CODES[_role_label]
+
     st.markdown("---")
     st.markdown("### 🎯 Filtres")
 
@@ -204,11 +230,24 @@ tab_analyse, tab_liste, tab_opps, tab_cmp, tab_carte, tab_asst = st.tabs([
     "🤖  Assistant",
 ])
 
+# Redirection automatique vers l'onglet Assistant (bouton "Analyser" de la liste)
+if st.session_state.pop("goto_assistant", False):
+    import streamlit.components.v1 as _stc
+    _stc.html(
+        """<script>
+        setTimeout(function() {
+            var tabs = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
+            if (tabs && tabs.length > 5) { tabs[5].click(); }
+        }, 500);
+        </script>""",
+        height=0,
+    )
+
 with tab_analyse:
     render_analysis(df, df_dvf_raw)
 
 with tab_liste:
-    render_list(df)
+    render_list(df, st.session_state["user_role"])
 
 with tab_opps:
     render_opportunities(df, df_dvf, df_scored, df_qrt)
@@ -222,4 +261,4 @@ with tab_carte:
     render_map(_df_carte)
 
 with tab_asst:
-    render_assistant(df_scored)
+    render_assistant(df_scored, st.session_state["user_role"])

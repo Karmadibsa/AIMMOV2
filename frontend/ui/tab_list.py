@@ -119,7 +119,39 @@ def _pagination_bar(page: int, n_pages: int, page_key: str, suffix: str = "") ->
 
 # ── Rendu principal ───────────────────────────────────────────────────────────
 
-def render_list(df: pd.DataFrame) -> None:
+_PROFIL_LABELS = {
+    "rp":           "Résidence Principale",
+    "investissement": "Investisseur locatif",
+    "rs":           "Résidence Secondaire",
+    "mixte":        "Immeuble mixte",
+}
+
+_PROMPT_PATH = Path(__file__).parent.parent.parent / "prompts" / "fiche_decision_v3.txt"
+
+
+def _build_fiche(row: pd.Series) -> str:
+    lines = []
+    if pd.notna(row.get("type_bien")):                lines.append(f"Type : {row['type_bien']}")
+    prix = row.get("valeur_fonciere")
+    if pd.notna(prix):                                 lines.append(f"Prix : {prix:,.0f} €")
+    surf = row.get("surface_reelle_bati")
+    if pd.notna(surf):                                 lines.append(f"Surface : {surf:.0f} m²")
+    pm2 = row.get("prix_m2")
+    if pd.notna(pm2):                                  lines.append(f"Prix/m² : {pm2:,.0f} €/m²")
+    pieces = row.get("nombre_pieces_principales")
+    if pd.notna(pieces):                               lines.append(f"Pièces : {int(pieces)}")
+    commune = row.get("nom_commune")
+    if pd.notna(commune):                              lines.append(f"Quartier : {commune}")
+    dpe = row.get("dpe")
+    if pd.notna(dpe) and str(dpe) not in ("nan", ""):  lines.append(f"DPE : {dpe}")
+    ecart_pct = row.get("ecart_pct")
+    if pd.notna(ecart_pct):                            lines.append(f"Écart vs marché : {ecart_pct:+.1f}%")
+    prix_predit = row.get("prix_predit")
+    if pd.notna(prix_predit):                          lines.append(f"Prix estimé : {prix_predit:,.0f} €")
+    return "\n".join(lines)
+
+
+def render_list(df: pd.DataFrame, user_role: str = "rp") -> None:
     st.markdown(f"**{len(df):,} bien(s)** correspondent à vos critères")
 
     if df.empty:
@@ -210,6 +242,34 @@ def render_list(df: pd.DataFrame) -> None:
             elif ep_f > 10: lbl += "  ⚠️"
 
         with st.expander(lbl):
+            # ── Bouton Analyser — pleine largeur, tout en haut ────────────────
+            _role_label = _PROFIL_LABELS.get(user_role, user_role)
+            if st.button(
+                f"🔍 Analyser avec NidBuyer — profil {_role_label}",
+                key=f"analyse_{global_idx}_p{page}",
+                type="primary",
+                use_container_width=True,
+            ):
+                _desc_clean = str(row.get("description", "")).strip()
+                if _desc_clean in ("", "nan"):
+                    _desc_clean = "Non disponible"
+                try:
+                    _template = _PROMPT_PATH.read_text(encoding="utf-8")
+                except FileNotFoundError:
+                    _template = "{fiche_structuree}\n\n{description_annonce}\n\nProfil : {profil}"
+                _prompt = _template.format(
+                    fiche_structuree=_build_fiche(row),
+                    description_annonce=_desc_clean,
+                    profil=_role_label,
+                )
+                _titre_court = titre[:80] + ("…" if len(titre) > 80 else "")
+                st.session_state["pending_analysis"]       = _prompt
+                st.session_state["pending_analysis_label"] = (
+                    f"Analyse ce bien pour mon profil {_role_label} : {_titre_court}"
+                )
+                st.session_state["goto_assistant"] = True
+                st.rerun()
+
             left, right = st.columns([1, 2], gap="medium")
 
             with left:
