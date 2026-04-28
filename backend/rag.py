@@ -22,6 +22,7 @@ import os
 from pathlib import Path
 
 import chromadb
+from chromadb.config import Settings as ChromaSettings
 from chromadb.utils import embedding_functions
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -37,6 +38,9 @@ EMBEDDING_MODEL  = "all-MiniLM-L6-v2"
 COLLECTION_NAME  = "annonces_toulon"
 INDEX_BATCH_SIZE = 100
 
+# Paramètres ChromaDB : désactive la télémétrie (évite le bruit dans les logs)
+_CHROMA_SETTINGS = ChromaSettings(anonymized_telemetry=False)
+
 # Initialisation paresseuse — créés au premier appel, pas à l'import.
 # Permet : (1) démarrage rapide d'uvicorn, (2) monkeypatching dans les tests.
 _client: chromadb.ClientAPI | None = None
@@ -47,7 +51,7 @@ def _get_client() -> chromadb.ClientAPI:
     global _client
     if _client is None:
         path = os.environ.get("CHROMA_PATH", CHROMA_PATH)
-        _client = chromadb.PersistentClient(path=path)
+        _client = chromadb.PersistentClient(path=path, settings=_CHROMA_SETTINGS)
     return _client
 
 
@@ -169,14 +173,14 @@ def _build_metadata(annonce: dict) -> dict:
 def _build_chroma_id(annonce: dict) -> str:
     """
     ID stable pour ChromaDB basé sur le lien (déduplication idempotente).
-    Fallback sur l'id Supabase si le lien est absent.
-    Pas de préfixe — les tests attendent de retrouver l'id exact (ex: "001").
+    Préfixe "ann_" conservé pour la compatibilité avec les données existantes.
+    L'ID original (ex: "001") est stocké dans les métadonnées et retourné par
+    search_similar() via **metadatas[i] qui écrase le champ "id" ChromaDB.
     """
     lien = annonce.get("lien") or annonce.get("url") or annonce.get("url_source")
     if lien:
-        return hashlib.md5(lien.encode()).hexdigest()
-    raw_id = annonce.get("id", "unknown")
-    return str(raw_id)
+        return "ann_" + hashlib.md5(lien.encode()).hexdigest()
+    return f"ann_{annonce.get('id', 'unknown')}"
 
 
 # ── Indexation ────────────────────────────────────────────────────────────────
