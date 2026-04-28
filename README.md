@@ -24,6 +24,7 @@
 
 ## Demo
 
+URL déployée : **https://nidbuyer.streamlit.app** *(à mettre à jour après déploiement)*
 URL déployée : **https://aimmo-project-immo.streamlit.app/**
 
 ## Pourquoi NidBuyer ?
@@ -112,7 +113,7 @@ FastAPI + Streamlit   ← interface acheteur déployée
 
 > *"Vos données P1 sont la fondation. Sans elles, pas de RAG."*
 
-Nombre d'annonces indexées dans la base RAG : **XXX** ← *à mettre à jour J1*
+Nombre d'annonces indexées dans la base RAG : **0** ← *à mettre à jour J1*
 
 ## Prompt Engineering
 

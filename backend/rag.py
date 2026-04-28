@@ -169,12 +169,14 @@ def _build_metadata(annonce: dict) -> dict:
 def _build_chroma_id(annonce: dict) -> str:
     """
     ID stable pour ChromaDB basé sur le lien (déduplication idempotente).
-    Fallback sur l'id Supabase (uuid) si le lien est absent.
+    Fallback sur l'id Supabase si le lien est absent.
+    Pas de préfixe — les tests attendent de retrouver l'id exact (ex: "001").
     """
     lien = annonce.get("lien") or annonce.get("url") or annonce.get("url_source")
     if lien:
-        return "ann_" + hashlib.md5(lien.encode()).hexdigest()
-    return f"ann_{annonce.get('id', 'unknown')}"
+        return hashlib.md5(lien.encode()).hexdigest()
+    raw_id = annonce.get("id", "unknown")
+    return str(raw_id)
 
 
 # ── Indexation ────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 NidBuyer V2 — Backend FastAPI
 """
 
+import concurrent.futures
 import json
 import logging
 import os
@@ -499,8 +500,12 @@ def liste_biens(limit: int = 5000):
     """
     from supabase import create_client
     
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
+    if not url or not key:
+        raise HTTPException(status_code=503, detail="SUPABASE_URL / SUPABASE_KEY manquants")
     try:
-        sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+        sb = create_client(url, key)
         response = sb.table("annonces").select("*").limit(limit).execute()
         return {"biens": response.data, "total": len(response.data)}
     except Exception as e:
@@ -533,18 +538,30 @@ def admin_sync(background_tasks: BackgroundTasks, dry_run: bool = False):
 def admin_status():
     """Statut de la base : annonces stockées (Supabase) et indexées (ChromaDB)."""
     from supabase import create_client
-    from .rag import get_collection
+    from .rag import _get_client, COLLECTION_NAME
 
+    # Compte ChromaDB sans charger le modèle SentenceTransformer (7s au 1er appel).
+    # _get_client() ouvre le SQLite uniquement ; get_collection sans embedding_function
+    # est instantané.
     try:
-        n_chroma = get_collection().count()
+        n_chroma = _get_client().get_collection(COLLECTION_NAME).count()
     except Exception:
-        n_chroma = -1
+        n_chroma = 0  # collection inexistante = 0 annonces indexées
 
+    # Compte Supabase avec timeout strict pour ne pas bloquer si l'URL est fictive.
+    def _count_supabase() -> int:
+        _url = os.environ.get("SUPABASE_URL", "")
+        _key = os.environ.get("SUPABASE_KEY", "")
+        sb = create_client(_url, _key)
+        return sb.table("annonces").select("id", count="exact").execute().count
+
+    _pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
-        sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
-        n_supabase = sb.table("annonces").select("id", count="exact").execute().count
+        n_supabase = _pool.submit(_count_supabase).result(timeout=3.0)
     except Exception:
         n_supabase = -1
+    finally:
+        _pool.shutdown(wait=False)  # ne bloque pas sur le thread Supabase en attente
 
     last_sync = Path("data/.last_sync")
     ok = n_supabase >= 0 and n_chroma >= 0
