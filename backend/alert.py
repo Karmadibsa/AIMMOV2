@@ -1,17 +1,17 @@
 """
 Alertes acheteur : notifie par email ou Slack quand un nouveau bien
 correspond à un profil enregistré.
+
+Utilise Gmail API pour l'envoi d'emails (OAuth2 sécurisé).
 """
 import os
 import json
-import smtplib
 import logging
 from pathlib import Path
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 import requests
+from .gmail_service import envoyer_email_gmail
 
 logger = logging.getLogger(__name__)
 PROFILES_FILE = Path("data/alertes.json")
@@ -76,28 +76,13 @@ def filtrer_biens(biens: list[dict], criteres: dict) -> list[dict]:
 
 
 def notifier_email(email: str, nom_alerte: str, biens: list[dict]) -> bool:
-    """Envoie un email avec les nouveaux biens correspondants."""
+    """Envoie un email avec Gmail API au lieu de SMTP classique."""
     if not biens:
         logger.info(f"Aucun bien à envoyer pour {email} (alerte: {nom_alerte})")
         return False
 
-    smtp_host = os.environ.get("SMTP_HOST")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_pass = os.environ.get("SMTP_PASSWORD")
-
-    if not all([smtp_host, smtp_user, smtp_pass]):
-        logger.error("❌ Configuration SMTP incomplète dans .env")
-        return False
-
     try:
-        # Construction du message
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"🏠 NidBuyer Alerte : {nom_alerte} - {len(biens)} bien(s)"
-        msg["From"] = smtp_user
-        msg["To"] = email
-
-        # HTML body
+        # Construction du HTML (inchangé)
         html_content = f"""
         <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -135,16 +120,15 @@ def notifier_email(email: str, nom_alerte: str, biens: list[dict]) -> bool:
         </html>
         """
 
-        msg.attach(MIMEText(html_content, "html"))
+        sujet = f"🏠 NidBuyer Alerte : {nom_alerte} - {len(biens)} bien(s)"
 
-        # Envoi
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-
-        logger.info(f"✉️ Email envoyé à {email} ({len(biens)} biens)")
-        return True
+        # 👉 ENVOI VIA GMAIL API (OAuth2 sécurisé)
+        success = envoyer_email_gmail(email, sujet, html_content)
+        
+        if success:
+            logger.info(f"✉️ Email Gmail envoyé à {email} ({len(biens)} biens)")
+        
+        return success
 
     except Exception as e:
         logger.error(f"❌ Erreur envoi email à {email}: {e}")
