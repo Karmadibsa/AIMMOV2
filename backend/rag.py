@@ -10,7 +10,7 @@ Responsabilités :
 
 Colonnes Supabase réelles (schéma actuel) :
     prix, surface, pieces, lien, quartier, date_publication, description,
-    dpe, ges, terrasse, balcon, parking, travaux, neuf, ascenseur, type_local
+    dpe, ges, terrasse, balcon, parking, travaux, neuf, ascenseur, type_bien
 
 Lancement de l'indexation initiale (depuis la racine de AIMMOV2/) :
     python -m backend.rag
@@ -62,8 +62,8 @@ def _build_document(annonce: dict) -> str:
     """
     parts = []
 
-    if annonce.get("type_local"):
-        parts.append(annonce["type_local"])
+    if annonce.get("type_bien"):
+        parts.append(annonce["type_bien"])
 
     if annonce.get("surface") is not None:
         parts.append(f"{annonce['surface']} m²")
@@ -127,7 +127,7 @@ def _build_metadata(annonce: dict) -> dict:
         "source":     _s(annonce.get("source")),
         # ── Géographie ─────────────────────────────────────────────────────
         "quartier":   _s(annonce.get("quartier")),
-        "type_local": _s(annonce.get("type_local")),
+        "type_bien": _s(annonce.get("type_bien")),
         # ── Chiffres (utilisés dans les filtres where des Personas) ────────
         "prix":       _f(annonce.get("prix")),
         "surface":    _f(annonce.get("surface")),
@@ -197,7 +197,7 @@ def indexer_annonces(annonces: list[dict]) -> int:
 
 # Colonnes sélectionnées — schéma réel de la table annonces
 _SELECT_COLONNES = (
-    "id, source, type_local, titre, "
+    "id, source, type_bien, titre, "
     "prix, surface, pieces, quartier, lien, date_publication, "
     "description, "
     "dpe, ges, travaux, neuf, terrasse, balcon, parking, ascenseur, "
@@ -373,7 +373,7 @@ if __name__ == "__main__":
         for i, r in enumerate(resultats, 1):
             print(
                 f"  #{i}  distance={r['distance']}  "
-                f"{r.get('type_local', '?')} - "
+                f"{r.get('type_bien', '?')} - "
                 f"{r.get('surface', '?')} m2 - "
                 f"{r.get('prix', '?')} euros - "
                 f"{r.get('quartier', '?')}  DPE:{r.get('dpe', '?')}"

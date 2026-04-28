@@ -66,7 +66,7 @@ def parse_row(row: dict) -> dict:
 
     Mapping CSV → colonnes SQL :
         source                   → source
-        type_local               → type_local
+        type_bien               → type_bien
         titre                    → titre
         valeur_fonciere          → valeur_fonciere  (NUMERIC)
         surface_reelle_bati      → surface_reelle_bati (NUMERIC)
@@ -82,7 +82,7 @@ def parse_row(row: dict) -> dict:
     """
     return {
         "source":                    _to_str_or_none(row.get("source", "")),
-        "type_local":                _to_str_or_none(row.get("type_local", "")),
+        "type_bien":                _to_str_or_none(row.get("type_bien", "")),
         "titre":                     _to_str_or_none(row.get("titre", "")),
         "valeur_fonciere":           _to_float_or_none(row.get("valeur_fonciere", "")),
         "surface_reelle_bati":       _to_float_or_none(row.get("surface_reelle_bati", "")),

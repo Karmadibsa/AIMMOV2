@@ -5,17 +5,26 @@ NidBuyer V2 — Backend FastAPI
 import json
 import logging
 import os
+import re as _re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
 import google.generativeai as genai
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
+# Chargement du .env avant tout accès à os.environ
+load_dotenv(Path(__file__).parent.parent / ".env")
+
 from .ingestion import sync
 
 logger = logging.getLogger(__name__)
+
+# Modèle chat configurable via GEMMA_MODEL dans .env
+# gemma-4-26b-it = version Instruct standard (moins bavarde que -a4b-it MoE)
+_CHAT_MODEL = os.environ.get("GEMMA_MODEL", "gemma-4-27b-it")
 
 # ── Configuration Globale Gemini ──────────────────────────────────────────────
 _api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -65,12 +74,46 @@ class ChatRequest(BaseModel):
     n_context: int = 5
 
 
+# ── Nettoyage sortie LLM ─────────────────────────────────────────────────────
+
+_THINKING_PREFIXES = (
+    "input:", "goal:", "plan:", "step ", "note:", "observation:",
+    "thought:", "reasoning:", "analysis:", "context:", "output:",
+    "réflexion:", "raisonnement:", "étape ", "objectif:", "analyse:",
+)
+
+def _clean_llm_output(text: str) -> str:
+    """Extrait <ANSWER>…</ANSWER> ou supprime les artefacts de raisonnement Gemma."""
+    if not text:
+        return text
+    # 1. Balise <ANSWER> (méthode primaire)
+    match = _re.search(r"<ANSWER>(.*?)</ANSWER>", text, _re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # 2. Blocs <think>
+    text = _re.sub(r"<think>.*?</think>", "", text, flags=_re.DOTALL | _re.IGNORECASE)
+    # 3. Lignes de raisonnement préfixées
+    lines = [l for l in text.splitlines()
+             if not any(l.strip().lower().startswith(p) for p in _THINKING_PREFIXES)]
+    text = "\n".join(lines)
+    # 4. Tronquer avant le premier marqueur conversationnel
+    lower = text.lower()
+    for marker in ("bonjour", "je ", "voici", "bien sûr", "d'accord",
+                   "pour votre", "j'ai trouvé", "parmi les"):
+        idx = lower.find(marker)
+        if 0 < idx < 300:
+            text = text[idx:]
+            break
+    return _re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 # ── Helpers partagés ──────────────────────────────────────────────────────────
 
 def _build_chroma_filters(
     budget_max: float | None,
     surface_min: float | None,
     nb_pieces_min: int | None,
+    type_bien: str | None = None,
 ) -> dict:
     """Construit un filtre ChromaDB $and depuis les contraintes du profil."""
     conditions: list[dict] = [{"prix": {"$gt": 0.0}}]
@@ -80,6 +123,8 @@ def _build_chroma_filters(
         conditions.append({"surface": {"$gte": float(surface_min)}})
     if nb_pieces_min:
         conditions.append({"nb_pieces": {"$gte": float(nb_pieces_min)}})
+    if type_bien in ("Appartement", "Maison"):
+        conditions.append({"type_bien": {"$eq": type_bien}})
     return {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
 
@@ -290,6 +335,7 @@ def chat_ia(req: ChatRequest):
         'JSON attendu (utilise null si inconnu) :\n'
         '{\n'
         '  "intention": "rp" | "rs" | "investissement" | "mixte" | null,\n'
+        '  "type_bien": "Appartement" | "Maison" | null,\n'
         '  "budget_max": <float en euros ou null>,\n'
         '  "surface_min": <float en m² ou null>,\n'
         '  "nb_pieces_min": <int ou null>,\n'
@@ -299,21 +345,21 @@ def chat_ia(req: ChatRequest):
     )
 
     profil_detecte: dict = {
-        "intention": None, "budget_max": None, "surface_min": None,
-        "nb_pieces_min": None, "quartiers": [], "description_libre": "",
+        "intention": None, "type_bien": None, "budget_max": None,
+        "surface_min": None, "nb_pieces_min": None,
+        "quartiers": [], "description_libre": "",
     }
 
     try:
         extract_model = genai.GenerativeModel(
-            os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
+            _CHAT_MODEL,
             generation_config=genai.GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=250,
+                temperature=0.0,
+                max_output_tokens=300,
                 response_mime_type="application/json",
             ),
         )
         raw = extract_model.generate_content(extraction_prompt).text.strip()
-        # Nettoyage des blocs ```json si présents
         if raw.startswith("```"):
             parts = raw.split("```")
             raw = parts[1].lstrip("json").strip() if len(parts) > 1 else raw
@@ -335,6 +381,7 @@ def chat_ia(req: ChatRequest):
         profil_detecte.get("budget_max"),
         profil_detecte.get("surface_min"),
         profil_detecte.get("nb_pieces_min"),
+        profil_detecte.get("type_bien"),
     )
     biens = search_similar(query=query, n_results=req.n_context, filtre_meta=filtre)
 
@@ -356,6 +403,8 @@ def chat_ia(req: ChatRequest):
 
     # ── 4. Réponse conversationnelle Gemini ───────────────────────────────────
     system_chat = (
+        "TU ES UN CONSEILLER IMMOBILIER, PAS UN CHERCHEUR. "
+        "Ne produis aucun texte avant la balise <ANSWER>. "
         "Tu es NidBuyer, conseiller immobilier expert à Toulon. "
         "Tu accompagnes l'acheteur de façon personnalisée et chaleureuse. "
         "Si tu ne connais pas encore le profil, pose 1 question ciblée "
@@ -363,7 +412,10 @@ def chat_ia(req: ChatRequest):
         "Si tu as des biens en contexte, présente le(s) plus pertinent(s) "
         "avec des chiffres précis. "
         "Tu te bases UNIQUEMENT sur les biens fournis — jamais de données inventées. "
-        "Sois concis (max 3 paragraphes)."
+        "Sois concis (max 3 paragraphes). "
+        "RÈGLE ABSOLUE : ta réponse doit commencer IMMÉDIATEMENT par <ANSWER> "
+        "et se terminer par </ANSWER>. Rien avant, rien après. "
+        "Exemple : <ANSWER>Bonjour ! Voici ce que j'ai trouvé…</ANSWER>"
     )
 
     # Reconstruction de l'historique pour Gemini (format alternant user/model)
@@ -376,18 +428,24 @@ def chat_ia(req: ChatRequest):
     user_msg = (
         f"Biens disponibles dans la base NidBuyer :\n{ctx}\n\n"
         f"Profil détecté : {profil_resume}\n"
-        f"Question : {req.question}"
+        f"Question : {req.question}\n\n"
+        "Rappel : entoure ta réponse de <ANSWER>…</ANSWER>."
     )
 
     reponse_text = "Je rencontre une difficulté momentanée. Réessayez dans quelques instants."
     try:
         chat_model = genai.GenerativeModel(
-            os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
+            _CHAT_MODEL,
             system_instruction=system_chat,
-            generation_config=genai.GenerationConfig(max_output_tokens=600, temperature=0.7),
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=700,
+                temperature=0.7,
+                stop_sequences=["Input:", "Reasoning:", "Plan:", "Step 1:", "Goal:"],
+            ),
         )
         chat_session = chat_model.start_chat(history=gemini_history)
-        reponse_text = chat_session.send_message(user_msg).text
+        raw_text = chat_session.send_message(user_msg).text
+        reponse_text = _clean_llm_output(raw_text)
     except Exception as e:
         logger.error("Gemini chat error : %s", e)
 

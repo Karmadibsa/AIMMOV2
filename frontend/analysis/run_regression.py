@@ -45,11 +45,11 @@ print(f"   ✅ {len(df)} transactions chargées")
 print("\n🏠 Filtrage par type de bien...")
 
 print(f"   Répartition avant filtrage :")
-print(f"      • Appartements : {len(df[df['type_local'] == 'Appartement'])}")
-print(f"      • Maisons      : {len(df[df['type_local'] == 'Maison'])}")
+print(f"      • Appartements : {len(df[df['type_bien'] == 'Appartement'])}")
+print(f"      • Maisons      : {len(df[df['type_bien'] == 'Maison'])}")
 
 # GARDER SEULEMENT LES APPARTEMENTS
-df = df[df['type_local'] == 'Appartement']
+df = df[df['type_bien'] == 'Appartement']
 
 print(f"\n   ✅ {len(df)} appartements conservés pour l'analyse")
 print(f"   ℹ️  Focus : Primo-accédants (typiquement acheteurs d'appartements)")

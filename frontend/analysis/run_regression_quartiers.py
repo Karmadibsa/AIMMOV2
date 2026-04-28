@@ -68,7 +68,7 @@ def analyser_type_bien(df, type_bien, prix_m2_min, prix_m2_max):
     """Calcule la régression linéaire globale et détecte les opportunités pour un type de bien."""
     print(f"🔄 Analyse des {type_bien.lower()}s en cours...")
     
-    df_type = df[df['type_local'] == type_bien].copy()
+    df_type = df[df['type_bien'] == type_bien].copy()
     
     if len(df_type) < 50:
         print(f"⚠️ Pas assez de données pour {type_bien}")
@@ -125,7 +125,7 @@ def analyser_type_bien(df, type_bien, prix_m2_min, prix_m2_max):
 def regression_par_quartier(df, type_bien):
     """Calcule la régression linéaire pour chaque quartier individuellement."""
     print(f"🔄 Calcul par quartiers pour les {type_bien.lower()}s...")
-    df_filtre = df[df['type_local'] == type_bien]
+    df_filtre = df[df['type_bien'] == type_bien]
     quartiers_presents = df_filtre[COL_QUARTIER].dropna().unique()
     
     resultats = []

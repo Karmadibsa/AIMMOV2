@@ -3,7 +3,7 @@ import pandas as pd
 df = pd.read_csv("donnees/dvf-nettoyer_800_day.csv")
 
 # Filtrer appartements
-df = df[df['type_local'] == 'Appartement']
+df = df[df['type_bien'] == 'Appartement']
 
 print("=" * 80)
 print("INVESTIGATION APPARTEMENTS")

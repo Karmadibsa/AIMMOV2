@@ -129,7 +129,7 @@ def render_list(df: pd.DataFrame) -> None:
     # ── Tableau ──────────────────────────────────────────────────────────────
     COLS = {
         "source":                    "Source",
-        "type_local":                "Type",
+        "type_bien":                "Type",
         "titre":                     "Titre",
         "valeur_fonciere":           "Prix (€)",
         "surface_reelle_bati":       "Surface (m²)",
@@ -252,7 +252,7 @@ def render_list(df: pd.DataFrame) -> None:
 
                 info_lines = [
                     ("🏷️ Source",  source),
-                    ("🏠 Type",    row.get("type_local", "—")),
+                    ("🏠 Type",    row.get("type_bien", "—")),
                     ("📐 Surface", f"{surface:.0f} m²" if pd.notna(surface) else "—"),
                     ("🚪 Pièces",  f"{int(row['nombre_pieces_principales'])}"
                      if pd.notna(row.get("nombre_pieces_principales")) else "—"),
