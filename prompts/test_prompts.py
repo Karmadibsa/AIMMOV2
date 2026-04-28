@@ -1,10 +1,16 @@
 import os
-from google.generativeai import GenerativeModel, configure
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
+
+# Charger le .env
+load_dotenv()
 
 # Config API
-configure(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = GenerativeModel(os.getenv("GEMMA_MODEL"))
+# Modèle — on met une valeur par défaut si GEMMA_MODEL est vide
+model_name = os.getenv("GEMMA_MODEL", "gemini-2.0-flash")
 
 # Charger les prompts
 with open("prompts/system.txt") as f:
@@ -13,7 +19,7 @@ with open("prompts/system.txt") as f:
 with open("prompts/fiche_decision_v3.txt") as f:
     user_prompt = f.read()
 
-# Données de test (ton bien de référence)
+# Données de test (bien de référence)
 fiche = """
 T3, 68m², Mourillon
 Prix : 215000€
@@ -36,8 +42,10 @@ final_prompt = user_prompt.format(
 )
 
 # Appel modèle
-response = model.generate_content(
-    system_prompt + "\n\n" + final_prompt
+response = client.models.generate_content(
+    model=model_name,
+    config=types.GenerateContentConfig(system_instruction=system_prompt),
+    contents=final_prompt
 )
 
 print(response.text)
