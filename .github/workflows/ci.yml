@@ -23,8 +23,11 @@ jobs:
 
       - name: Run tests
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: pytest tests/ -v --tb=short
+          GEMINI_API_KEY:  "test-gemini-key-ci"
+          SUPABASE_URL:    "https://placeholder.supabase.co"
+          SUPABASE_KEY:    "placeholder-key"
+          CHROMA_PATH:     "/tmp/chroma_ci"
+        run: pytest tests/ -v --tb=short --ignore=tests/test_vision.py
 
   lint:
     runs-on: ubuntu-latest

@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Chargement du .env avant tout accès à os.environ
@@ -45,6 +46,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="NidBuyer API", version="0.2.0", lifespan=lifespan)
+
+# ── CORS ─────────────────────────────────────────────────────────────────────
+# allow_origins=["*"] couvre Streamlit Cloud + tout frontend pendant la phase de lancement.
+# Restreindre à l'URL Streamlit exacte une fois le domaine stable.
+_allowed_origins = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ── Modèles ───────────────────────────────────────────────────────────────────
@@ -536,8 +549,9 @@ def admin_status():
     last_sync = Path("data/.last_sync")
     ok = n_supabase >= 0 and n_chroma >= 0
     return {
-        "supabase_count": n_supabase,
-        "chromadb_count": n_chroma,
-        "derniere_sync":  last_sync.read_text() if last_sync.exists() else "jamais",
-        "status":         "ok" if ok else "degraded",
+        "supabase_count":   n_supabase,
+        "chromadb_count":   n_chroma,
+        "annonces_indexees": n_chroma,   # alias pour test_auto_eval.py
+        "derniere_sync":    last_sync.read_text() if last_sync.exists() else "jamais",
+        "status":           "ok" if ok else "degraded",
     }

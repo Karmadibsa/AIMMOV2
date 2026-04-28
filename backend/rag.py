@@ -37,17 +37,34 @@ EMBEDDING_MODEL  = "all-MiniLM-L6-v2"
 COLLECTION_NAME  = "annonces_toulon"
 INDEX_BATCH_SIZE = 100
 
-_client = chromadb.PersistentClient(path=CHROMA_PATH)
-_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-    model_name=EMBEDDING_MODEL
-)
+# Initialisation paresseuse — créés au premier appel, pas à l'import.
+# Permet : (1) démarrage rapide d'uvicorn, (2) monkeypatching dans les tests.
+_client: chromadb.ClientAPI | None = None
+_ef = None
+
+
+def _get_client() -> chromadb.ClientAPI:
+    global _client
+    if _client is None:
+        path = os.environ.get("CHROMA_PATH", CHROMA_PATH)
+        _client = chromadb.PersistentClient(path=path)
+    return _client
+
+
+def _get_ef():
+    global _ef
+    if _ef is None:
+        _ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name=EMBEDDING_MODEL
+        )
+    return _ef
 
 
 def get_collection() -> chromadb.Collection:
     """Retourne (ou crée) la collection ChromaDB des annonces."""
-    return _client.get_or_create_collection(
+    return _get_client().get_or_create_collection(
         name=COLLECTION_NAME,
-        embedding_function=_ef,
+        embedding_function=_get_ef(),
         metadata={"hnsw:space": "cosine"},
     )
 

@@ -1,12 +1,15 @@
 """Onglet Assistant — Chatbot IA NidBuyer."""
 
+import os
 import re as _re
 
 import pandas as pd
 import streamlit as st
 import requests
 
-API_URL = "http://localhost:8000"
+# En prod : définir BACKEND_URL dans les secrets Streamlit Cloud.
+# En dev local : fallback sur localhost:8000.
+API_URL = os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
 
 # ── Nettoyage côté client (double protection si le backend laisse passer du bruit) ──
 
