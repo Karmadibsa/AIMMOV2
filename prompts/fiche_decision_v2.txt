@@ -13,7 +13,7 @@ Réponds UNIQUEMENT dans ce format Markdown, sans introduction ni conclusion :
 **Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
 **Verdict** : Sous-évalué / Dans la norme / Surévalué
 
-## ✅ Points forts pour ce profil
+## ✅ Points forts
 - Point 1 (avec chiffre)
 - Point 2 (avec chiffre)
 

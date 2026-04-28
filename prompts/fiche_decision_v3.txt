@@ -7,22 +7,24 @@ Annonce originale :
 
 Profil de l'acheteur : {profil}
 
-Avant de répondre, raisonne étape par étape en suivant exactement cette séquence :
+Raisonne en interne sur ces 4 axes avant de répondre :
+1. PRIX : L'écart au DVF est-il significatif ? Calcule la valeur médiane en € (surface × médiane/m²)
+2. PROFIL : Les critères prioritaires de ce profil sont-ils satisfaits ?
+3. RISQUES : Quels éléments de l'annonce peuvent cacher un problème ?
+4. NÉGOCIATION : Quel prix plancher est défendable avec les données DVF ?
 
-<reflexion>
-1. PRIX : Compare le prix/m² au DVF du quartier. L'écart est-il significatif ? Pourquoi ?
-2. PROFIL : Quels sont les critères prioritaires de cet acheteur ? Ce bien y répond-il ?
-3. RISQUES : Quels éléments de l'annonce ou du marché peuvent poser problème ?
-4. NÉGOCIATION : Quel est le prix plancher raisonnable basé sur les données DVF ?
-</reflexion>
+Puis réponds dans ce format exact :
 
-Puis réponds UNIQUEMENT dans ce format :
+[Un paragraphe d'introduction de 2-3 phrases en langage naturel, 
+sans titre ni bullet points, qui mentionne obligatoirement :
+- le prix/m² et l'écart à la médiane en % ET en €
+- ce que ça implique concrètement pour le profil de l'acheteur]
 
 ## 🏠 Opportunité
 **Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
 **Verdict** : Sous-évalué / Dans la norme / Surévalué
 
-## ✅ Points forts pour ce profil
+## ✅ Points forts
 - Point 1 (avec chiffre)
 - Point 2 (avec chiffre)
 
