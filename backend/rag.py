@@ -21,6 +21,9 @@ import logging
 import os
 from pathlib import Path
 
+# Désactive la télémétrie anonyme de ChromaDB (évite le bruit dans les logs)
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "false")
+
 import chromadb
 from chromadb.utils import embedding_functions
 from dotenv import load_dotenv
