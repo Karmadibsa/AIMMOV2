@@ -104,7 +104,7 @@ Réponds UNIQUEMENT dans ce format Markdown, sans introduction ni conclusion :
 **Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
 **Verdict** : Sous-évalué / Dans la norme / Surévalué
 
-## ✅ Points forts pour ce profil
+## ✅ Points forts
 - Point 1 (avec chiffre)
 - Point 2 (avec chiffre)
 
@@ -125,7 +125,7 @@ Réponds UNIQUEMENT dans ce format Markdown, sans introduction ni conclusion :
 > **Prix/m²** : 3 162 €/m² vs médiane quartier 3 400 €/m² → écart : -7%
 > **Verdict** : Sous-évalué
 >
-> ## ✅ Points forts pour ce profil
+> ## ✅ Points forts
 >
 > - Localisation Mourillon à très forte demande locative
 > - Prix d'acquisition déjà inférieur de 7% à la médiane du quartier
@@ -181,7 +181,7 @@ sans titre ni bullet points, qui mentionne obligatoirement :
 **Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
 **Verdict** : Sous-évalué / Dans la norme / Surévalué
 
-## ✅ Points forts pour ce profil
+## ✅ Points forts
 - Point 1 (avec chiffre)
 - Point 2 (avec chiffre)
 
