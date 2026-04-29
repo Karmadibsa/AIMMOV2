@@ -338,28 +338,6 @@ def render_list(df: pd.DataFrame, user_role: str = "rp") -> None:
                           if not _photo_urls else
                           f"Analyse vision IA sur {min(len(_photo_urls), 4)} photo(s) "
                           "pour estimer l'état du bien et les travaux à prévoir."),
-            if st.button(
-                f"🔍 Analyser avec NidBuyer — profil {_role_label}",
-                key=f"analyse_{global_idx}_p{page}",
-                type="primary",
-                use_container_width=True,
-            ):
-                _desc_clean = str(row.get("description", "")).strip()
-                if _desc_clean in ("", "nan"):
-                    _desc_clean = "Non disponible"
-                try:
-                    _template = _PROMPT_PATH.read_text(encoding="utf-8")
-                except FileNotFoundError:
-                    _template = "{fiche_structuree}\n\n{description_annonce}\n\nProfil : {profil}"
-                _prompt = _template.format(
-                    fiche_structuree=_build_fiche(row),
-                    description_annonce=_desc_clean,
-                    profil=_role_label,
-                )
-                _titre_court = titre[:80] + ("…" if len(titre) > 80 else "")
-                st.session_state["pending_analysis"]       = _prompt
-                st.session_state["pending_analysis_label"] = (
-                    f"Analyse ce bien pour mon profil {_role_label} : \"{_titre_court}\""
                 )
                 if _vision_btn and _photo_urls:
                     with st.spinner("🤖 Analyse des images en cours…"):
