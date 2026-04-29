@@ -150,23 +150,56 @@ _PROMPT_PATH = Path(__file__).parent.parent.parent / "prompts" / "fiche_decision
 
 def _build_fiche(row: pd.Series) -> str:
     lines = []
-    if pd.notna(row.get("type_bien")):                lines.append(f"Type : {row['type_bien']}")
+
+    titre = str(row.get("titre", "")).strip()
+    if titre and titre != "nan":
+        lines.append(f"Titre : {titre}")
+
+    if pd.notna(row.get("type_bien")) and str(row["type_bien"]) != "nan":
+        lines.append(f"Type : {row['type_bien']}")
+
     prix = row.get("valeur_fonciere")
-    if pd.notna(prix):                                 lines.append(f"Prix : {prix:,.0f} €")
+    if pd.notna(prix):
+        lines.append(f"Prix affiché : {prix:,.0f} €")
+
     surf = row.get("surface_reelle_bati")
-    if pd.notna(surf):                                 lines.append(f"Surface : {surf:.0f} m²")
+    if pd.notna(surf):
+        lines.append(f"Surface : {surf:.0f} m²")
+
     pm2 = row.get("prix_m2")
-    if pd.notna(pm2):                                  lines.append(f"Prix/m² : {pm2:,.0f} €/m²")
+    if pd.notna(pm2):
+        lines.append(f"Prix/m² : {pm2:,.0f} €/m²")
+    elif pd.notna(prix) and pd.notna(surf) and surf > 0:
+        # Calcul à la volée si la colonne est absente
+        lines.append(f"Prix/m² (calculé) : {prix / surf:,.0f} €/m²")
+
     pieces = row.get("nombre_pieces_principales")
-    if pd.notna(pieces):                               lines.append(f"Pièces : {int(pieces)}")
+    if pd.notna(pieces):
+        lines.append(f"Pièces : {int(pieces)}")
+
     commune = row.get("nom_commune")
-    if pd.notna(commune):                              lines.append(f"Quartier : {commune}")
+    if pd.notna(commune) and str(commune) != "nan":
+        lines.append(f"Quartier / Commune : {commune}")
+
     dpe = row.get("dpe")
-    if pd.notna(dpe) and str(dpe) not in ("nan", ""):  lines.append(f"DPE : {dpe}")
+    if pd.notna(dpe) and str(dpe) not in ("nan", ""):
+        lines.append(f"DPE : {dpe}")
+
     ecart_pct = row.get("ecart_pct")
-    if pd.notna(ecart_pct):                            lines.append(f"Écart vs marché : {ecart_pct:+.1f}%")
+    if pd.notna(ecart_pct):
+        lines.append(f"Écart vs régression marché : {ecart_pct:+.1f}%")
+
     prix_predit = row.get("prix_predit")
-    if pd.notna(prix_predit):                          lines.append(f"Prix estimé : {prix_predit:,.0f} €")
+    if pd.notna(prix_predit):
+        lines.append(f"Prix estimé par le modèle : {prix_predit:,.0f} €")
+
+    source = str(row.get("source", "")).strip()
+    if source and source not in ("nan", ""):
+        lines.append(f"Source : {source}")
+
+    if not lines:
+        return "Données structurées non disponibles — analyse basée sur la description uniquement."
+
     return "\n".join(lines)
 
 
@@ -263,6 +296,7 @@ def render_list(df: pd.DataFrame, user_role: str = "rp") -> None:
         with st.expander(lbl):
             # ── Boutons Analyser — pleine largeur, tout en haut ────────────────
             _role_label = _PROFIL_LABELS.get(user_role, user_role)
+
             _photo_urls = _photos_to_urls(row.get("photos"))
             _vision_key = f"vision_result_{global_idx}_p{page}"
 
@@ -304,6 +338,28 @@ def render_list(df: pd.DataFrame, user_role: str = "rp") -> None:
                           if not _photo_urls else
                           f"Analyse vision IA sur {min(len(_photo_urls), 4)} photo(s) "
                           "pour estimer l'état du bien et les travaux à prévoir."),
+            if st.button(
+                f"🔍 Analyser avec NidBuyer — profil {_role_label}",
+                key=f"analyse_{global_idx}_p{page}",
+                type="primary",
+                use_container_width=True,
+            ):
+                _desc_clean = str(row.get("description", "")).strip()
+                if _desc_clean in ("", "nan"):
+                    _desc_clean = "Non disponible"
+                try:
+                    _template = _PROMPT_PATH.read_text(encoding="utf-8")
+                except FileNotFoundError:
+                    _template = "{fiche_structuree}\n\n{description_annonce}\n\nProfil : {profil}"
+                _prompt = _template.format(
+                    fiche_structuree=_build_fiche(row),
+                    description_annonce=_desc_clean,
+                    profil=_role_label,
+                )
+                _titre_court = titre[:80] + ("…" if len(titre) > 80 else "")
+                st.session_state["pending_analysis"]       = _prompt
+                st.session_state["pending_analysis_label"] = (
+                    f"Analyse ce bien pour mon profil {_role_label} : \"{_titre_court}\""
                 )
                 if _vision_btn and _photo_urls:
                     with st.spinner("🤖 Analyse des images en cours…"):
