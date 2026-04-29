@@ -147,7 +147,7 @@ def render_comparator(df: pd.DataFrame) -> None:
 
         # Construction des labels pour le multiselect
         def _make_label(row) -> str:
-            t     = str(row.get("type_local", "Bien"))[:10]
+            t     = str(row.get("type_bien", "Bien"))[:10]
             titre = str(row.get("titre", ""))[:40]
             prix  = row.get("valeur_fonciere")
             surf  = row.get("surface_reelle_bati")

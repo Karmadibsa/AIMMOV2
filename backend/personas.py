@@ -70,7 +70,7 @@ PERSONAS: dict[str, dict] = {
         "query":      "immeuble de rapport, local commercial et logements, investissement mixte",
         # Type de bien = "Immeuble" (valeur telle qu'indexée depuis Supabase)
         "filters": {
-            "type_local": {"$eq": "Immeuble"}
+            "type_bien": {"$eq": "Immeuble"}
         },
     },
 }

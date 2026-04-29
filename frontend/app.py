@@ -46,12 +46,28 @@ df_raw     = load_data()
 dvf_models = get_dvf_models(str(DVF_CSV_PATH))
 df_dvf_raw = load_dvf_raw(str(DVF_CSV_PATH))
 
-# ── Session state — Assistant ──────────────────────────────────────────────────
+# ── Session state ─────────────────────────────────────────────────────────────
 for _k, _v in [("asst_step", 0), ("asst_type", None),
                ("asst_budget", None), ("asst_surface", None),
+
                ("show_alert_form", False), ("alert_filters_saved", False)]:
+
+               ("user_role", "rp"), ("chat_history", None)]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
+
+_ROLE_LABELS = [
+    "Résidence Principale (RP)",
+    "Investissement (INV)",
+    "Résidence Secondaire (RS)",
+    "Immeuble Mixte (MIX)",
+]
+_ROLE_CODES = {
+    "Résidence Principale (RP)": "rp",
+    "Investissement (INV)":      "investissement",
+    "Résidence Secondaire (RS)": "rs",
+    "Immeuble Mixte (MIX)":      "mixte",
+}
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -62,9 +78,21 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.markdown("---")
+
+    # ── Sélecteur de rôle acheteur ────────────────────────────────────────────
+    st.markdown("### 🧑 Profil d'Acheteur")
+    _role_label = st.radio(
+        "Votre Profil d'Acheteur",
+        _ROLE_LABELS,
+        label_visibility="collapsed",
+        key="user_role_radio",
+    )
+    st.session_state["user_role"] = _ROLE_CODES[_role_label]
+
+    st.markdown("---")
     st.markdown("### 🎯 Filtres")
 
-    types_dispo = sorted(df_raw["type_local"].dropna().unique()) if not df_raw.empty else []
+    types_dispo = sorted(df_raw["type_bien"].dropna().unique()) if not df_raw.empty else []
     type_filtre = st.selectbox("Type de bien", ["Tous"] + list(types_dispo))
 
     budget_max = st.slider("Budget max (€)", 50_000, 500_000, 500_000, 10_000, format="%d €")
@@ -203,7 +231,7 @@ if df_raw.empty:
 # ── Filtrage ───────────────────────────────────────────────────────────────────
 df = df_raw.copy()
 if type_filtre != "Tous":
-    df = df[df["type_local"] == type_filtre]
+    df = df[df["type_bien"] == type_filtre]
 if budget_max < 500_000:
     df = df[df["valeur_fonciere"] <= budget_max]
 if surface_min > 0:
@@ -225,7 +253,7 @@ if prix_baisse_only and "prix_baisse" in df.columns:
 
 # ── Régressions ────────────────────────────────────────────────────────────────
 df_scored = (
-    compute_regression(df[df["type_local"].notna()].copy().reset_index(drop=True))
+    compute_regression(df[df["type_bien"].notna()].copy().reset_index(drop=True))
     if not df.empty else pd.DataFrame()
 )
 if (not df_scored.empty and "ecart_pct" in df_scored.columns
@@ -234,11 +262,11 @@ if (not df_scored.empty and "ecart_pct" in df_scored.columns
     df = df.merge(_reg_cols, on="url", how="left", suffixes=("", "_reg")).reset_index(drop=True)
 
 df_dvf = (
-    compute_dvf_scores(df[df["type_local"].notna()].copy().reset_index(drop=True), models=dvf_models)
+    compute_dvf_scores(df[df["type_bien"].notna()].copy().reset_index(drop=True), models=dvf_models)
     if not df.empty else pd.DataFrame()
 )
 df_qrt = (
-    compute_neighborhood_scores(df[df["type_local"].notna()].copy().reset_index(drop=True))
+    compute_neighborhood_scores(df[df["type_bien"].notna()].copy().reset_index(drop=True))
     if not df.empty else pd.DataFrame()
 )
 
@@ -297,11 +325,24 @@ tab_analyse, tab_liste, tab_opps, tab_cmp, tab_carte, tab_asst = st.tabs([
     "🤖  Assistant",
 ])
 
+# Redirection automatique vers l'onglet Assistant (bouton "Analyser" de la liste)
+if st.session_state.pop("goto_assistant", False):
+    import streamlit.components.v1 as _stc
+    _stc.html(
+        """<script>
+        setTimeout(function() {
+            var tabs = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
+            if (tabs && tabs.length > 5) { tabs[5].click(); }
+        }, 500);
+        </script>""",
+        height=0,
+    )
+
 with tab_analyse:
     render_analysis(df, df_dvf_raw)
 
 with tab_liste:
-    render_list(df)
+    render_list(df, st.session_state["user_role"])
 
 with tab_opps:
     render_opportunities(df, df_dvf, df_scored, df_qrt)
@@ -315,4 +356,4 @@ with tab_carte:
     render_map(_df_carte)
 
 with tab_asst:
-    render_assistant(df_scored)
+    render_assistant(df_scored, st.session_state["user_role"])

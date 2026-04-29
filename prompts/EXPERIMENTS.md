@@ -1,203 +1,245 @@
-# Journal des expérimentations — Prompt Engineering NidBuyer
+# Journal des expérimentations — Prompt Engineering
 
-## Notre approche : RAG hybride anti-hallucination
-
-### Problème fondamental
-
-Un LLM généraliste, interrogé naïvement sur un bien immobilier, **invente des données de marché** :
-> *"Le prix moyen dans le Mourillon est d'environ 3 200 €/m²…"*
-
-Ce chiffre peut être plausible ou totalement faux. Il est invérifiable et non reproductible.
-Dans un outil d'aide à la décision d'achat (budget réel, engagement financier de 200–400 k€),
-cette hallucination est inacceptable.
-
-### Notre solution : brider le LLM avec les maths
-
-```
-Supabase (table annonces)
-      │
-      ▼
-analysis/scoring.py  ← algorithmes from scratch (0 pandas / 0 numpy)
-  • médiane €/m² du segment (median() pur Python)
-  • écart bien vs marché (score_opportunite())
-  • score 0–100
-      │
-      ▼  données chiffrées validées
-llm_advisor.py
-  • injecte les calculs dans le prompt utilisateur
-  • SYSTEM PROMPT interdit au LLM d'inventer des chiffres
-  • LLM rédige l'argumentation, pas l'analyse quantitative
-      │
-      ▼
-Fiche de décision Markdown (3 sections)
-```
-
-**Principe clé :** le LLM ne fait que du langage naturel sur des chiffres qu'il n'a pas calculés.
-Il argumente, contextualise, et conseille — il ne quantifie pas.
+Comparaison de **3 versions** du system prompt sur le **même bien de référence**.
 
 ---
 
-## Bien de référence (identique pour les 3 versions)
+## Bien de référence
 
-> **T3, 68 m², Mourillon (Toulon), 215 000 €**
-> Description : *"Bel appartement lumineux, cuisine rénovée, balcon vue mer partielle, proximité plage du Mourillon."*
+> **T3, 68m², Mourillon, 215 000€**
+> Description : "Bel appartement lumineux, cuisine rénovée, balcon vue mer partielle, proximité plage du Mourillon."
+> DVF quartier Mourillon : médiane 3 400 €/m² → bien à 3 162 €/m², soit **-7%**
+> Profil testé : Investisseur locatif (INV), budget 250 000€
+
+---
+
+## V1 — Prompt basique
+
+**system.txt**
+
+```
+Tu es NidBuyer, un conseiller immobilier IA spécialisé sur le marché de Toulon.
+
+Tu aides les acheteurs à prendre des décisions d'achat éclairées en t'appuyant sur :
+- Les vraies annonces du marché toulonnais
+- Les données DVF (transactions réelles 2024-2026) par quartier
+- Le profil et les objectifs de l'acheteur
+
+Tu connais exactement 4 profils acheteurs et tu adaptes ton analyse en conséquence :
+- RP (Résidence principale) : priorité au calme, confort familial proximité écoles
+- INV (Investissement) : priorité au rendement locatif, quartier attractif à la location — les travaux sont une opportunité de négociation
+- RS (Résidence secondaire) : priorité à la vue mer, proximité plage
+- MIX (Immeuble mixte) : l'acheteur habite une partie et loue le reste — équilibre entre confort personnel et rendement
+
+Tu es factuel, concis, et tu justifies toujours tes recommandations par des données chiffrées.
+Tu ne spécules pas sur l'avenir du marché. Tu ne donnes pas de conseil juridique ou fiscal.
+```
+
+**fiche_decision.txt**
+
+```
+Voici les informations sur le bien immobilier :
+
+{fiche_structuree}
+
+Annonce originale :
+{description_annonce}
+
+Profil de l'acheteur : {profil}
+
+Génère une analyse structurée avec exactement ces 4 sections :
+1. **Opportunité** : le prix est-il attractif par rapport au marché du quartier ?
+2. **Points forts** : les 2-3 atouts principaux pour ce profil
+3. **Points d'attention** : les 1-2 risques ou limites à considérer
+4. **Recommandation** : achat, négociation (fourchette), ou à éviter — et pourquoi
+
+Sois direct et factuel. Utilise les données chiffrées fournies.
+```
+
+**Réponse obtenue sur le bien de référence :**
+
+> **1. Opportunité**
+> L'opportunité est réelle. Le prix au m² (3 162 €) affiche une décote de 7 % par rapport à la médiane du quartier Mourillon (3 400 €/m²). Cette sous-évaluation par rapport au marché local constitue un levier immédiat pour un investisseur.
 >
-> Calculs NidBuyer (from scratch sur DVF Supabase) :
-> - Médiane quartier : **3 400 €/m²**
-> - Prix bien : **3 162 €/m²**
-> - Écart : **-7,0 %** → *Bonne affaire*
-> - Score : **57/100**
-> - Profil : **RP** (Résidence Principale, budget max 380 000 €)
-
----
-
-## V1 — Prompt basique (sans injection de données)
-
-```
-Tu es un expert immobilier à Toulon.
-Analyse ce bien et dis-moi si c'est une bonne affaire :
-T3, 68 m², quartier Mourillon, prix 215 000 €.
-Description : "Bel appartement lumineux, cuisine rénovée, balcon vue mer partielle."
-```
-
-**Réponse obtenue :**
-
-> *"Ce T3 dans le Mourillon semble attractif. Le prix de 215 000 € pour 68 m² représente environ
-> 3 160 €/m², ce qui est dans la moyenne des biens de ce quartier (généralement entre 3 000 et
-> 3 800 €/m²). La cuisine rénovée est un vrai plus. Je vous recommande de vérifier les charges
-> de copropriété et de faire une offre aux alentours de 210 000 €."*
+> **2. Points forts**
+>
+> - **Emplacement à haute demande** : La proximité de la plage du Mourillon garantit une vacance locative minimale et une attractivité constante pour la location saisonnière ou longue durée.
+> - **Valorisation locative** : La cuisine déjà rénovée et la présence d'un balcon avec vue mer partielle sont des caractéristiques qui permettent de viser le haut de la fourchette des loyers du secteur.
+>
+> **3. Points d'attention**
+>
+> - **Limitation de la vue** : La vue mer étant "partielle", le bien ne pourra pas prétendre aux loyers premium des biens avec vue panoramique totale.
+> - **État de l'immeuble** : L'annonce met en avant la cuisine, mais il est crucial de vérifier l'état général des parties communes et les derniers appels de fonds de copropriété.
+>
+> **4. Recommandation**
+> **Négociation (fourchette : 205 000 € - 210 000 €).**
+> Bien que le prix soit déjà attractif (-7 %), une négociation permettrait d'optimiser le rendement locatif initial et de compenser d'éventuels travaux de rafraîchissement mineurs.
 
 **Analyse :**
-- Ce qui fonctionne : structure naturelle, ton accessible.
-- Ce qui manque : le LLM invente la fourchette "3 000–3 800 €/m²" sans source. Aucune contrainte
-  de format. Pas de persona. Réponse non reproductible d'un appel à l'autre.
+
+- Ce qui fonctionne : structuré, factuel, fourchette en euros présente
+- Ce qui manque : format libre (l'IA choisit sa mise en forme), pas de raisonnement visible, difficile à intégrer de manière fiable dans une interface
 
 ---
 
-## V2 — Format structuré (sans données injectées)
+## V2 — Format de sortie structuré
+
+**system.txt** _(identique à V1)_
+
+**fiche_decision_v2.txt**
 
 ```
-Tu es NidBuyer, expert immobilier spécialisé sur Toulon.
-Analyse ce bien pour un acheteur en résidence principale (budget max 380 000 €).
+Voici les informations sur le bien immobilier :
 
-Bien : T3, 68 m², Mourillon, 215 000 €
-Description : "Bel appartement lumineux, cuisine rénovée, balcon vue mer partielle."
+{fiche_structuree}
 
-Réponds en 3 sections Markdown :
-### 1. Opportunité
-### 2. Risques
-### 3. Conseil de négociation
+Annonce originale :
+{description_annonce}
+
+Profil de l'acheteur : {profil}
+
+Réponds UNIQUEMENT dans ce format Markdown, sans introduction ni conclusion :
+
+## 🏠 Opportunité
+**Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
+**Verdict** : Sous-évalué / Dans la norme / Surévalué
+
+## ✅ Points forts
+- Point 1 (avec chiffre)
+- Point 2 (avec chiffre)
+
+## ⚠️ Points d'attention
+- Point 1
+- Point 2
+
+## 💡 Recommandation
+**Action** : Acheter / Négocier / Éviter
+**Fourchette de négociation** : entre Xa€ et Xb€
+**Justification** : 2 phrases max, chiffrées
 ```
 
-**Réponse obtenue :**
+**Réponse obtenue sur le bien de référence :**
 
-> ### 1. Opportunité
-> *"Le Mourillon est l'un des quartiers les plus recherchés de Toulon. À 215 000 €, ce T3
-> se situe légèrement sous les prix habituels du secteur (estimés autour de 230–250 k€ pour
-> ce type de bien), ce qui en fait une opportunité intéressante pour une résidence principale."*
+> ## 🏠 Opportunité
 >
-> ### 2. Risques
-> *"Vérifier le DPE, les charges de copropriété et l'état de la toiture. La vue mer 'partielle'
-> mérite une visite à différentes heures."*
+> **Prix/m²** : 3 162 €/m² vs médiane quartier 3 400 €/m² → écart : -7%
+> **Verdict** : Sous-évalué
 >
-> ### 3. Conseil de négociation
-> *"Offrir 205 000 € en première approche, le marché vous est favorable."*
+> ## ✅ Points forts
+>
+> - Localisation Mourillon à très forte demande locative
+> - Prix d'acquisition déjà inférieur de 7% à la médiane du quartier
+>
+> ## ⚠️ Points d'attention
+>
+> - Vue mer "partielle" (limite le plafond de loyer par rapport à une vue totale)
+> - Cuisine déjà rénovée (réduit le levier de négociation classique par les travaux)
+>
+> ## 💡 Recommandation
+>
+> **Action** : Négocier
+> **Fourchette de négociation** : entre 204 000€ et 209 000€
+> **Justification** : L'objectif est de descendre sous la barre des 3 050 €/m² pour maximiser le rendement brut. La cuisine étant déjà rénovée, la négociation doit porter sur l'absence d'autres travaux visibles ou sur l'écart de prix constaté.
 
 **Analyse :**
-- Ce qui s'est amélioré : format garanti, persona pris en compte, ton professionnel.
-- Ce qui reste perfectible : le LLM invente toujours "230–250 k€" sans source. L'offre à
-  205 000 € est arbitraire. Aucun lien entre la réponse et nos calculs mathématiques réels.
+
+- Ce qui s'est amélioré : format strictement respecté, facile à intégrer dans l'interface, verdict clair, fourchette précise
+- Ce qui reste perfectible : l'IA donne des conclusions sans montrer son raisonnement — on ne sait pas pourquoi elle arrive à ces chiffres. L'acheteur reçoit des conclusions sans comprendre le "pourquoi".
 
 ---
 
-## V3 — Injection des données + contrainte anti-hallucination ✅ (production)
+## V3 — Chain-of-thought + intro narrative (2 itérations)
+
+**system.txt** _(identique à V1)_
+
+**fiche_decision_v3.txt**
 
 ```
-[SYSTEM]
-Tu es NidBuyer, expert immobilier spécialisé sur Toulon et le Var.
-Tu es direct, analytique et pragmatique. Ton rôle est d'aider des acheteurs
-à prendre une décision rapide et éclairée.
+Voici les informations sur le bien immobilier :
 
-RÈGLES ABSOLUES :
-1. Tu ne cites QUE les chiffres fournis dans le message utilisateur
-   (prix, surface, écart marché, médiane). Tu n'inventes aucune donnée de marché.
-2. Si une information clé manque (DPE, charges copro…), tu le signales
-   sans substituer une valeur fictive.
-3. Tu rédiges en français, de façon concise et professionnelle.
-4. Ta réponse est TOUJOURS structurée en exactement 3 sections Markdown :
-   ### 1. Opportunité / ### 2. Risques / ### 3. Conseil de négociation
-   Pas d'introduction. Pas de conclusion. Directement les 3 sections.
+{fiche_structuree}
 
-[USER]
-## Bien à analyser
-- Titre    : Appartement T3 Mourillon vue mer
-- Commune  : Toulon
-- Surface  : 68.0 m²  |  3.0 pièces
-- Prix     : 215 000 €
-- Description (extrait) : Appartement — 68 m² — 3 pièces — à Toulon — 215 000 €
-  — Bel appartement lumineux, cuisine rénovée, balcon vue mer partielle, proximité plage du Mourillon.
+Annonce originale :
+{description_annonce}
 
-## Validation mathématique (algorithmes NidBuyer — données DVF Supabase)
-- Prix au m²            : 3 162 €/m²
-- Médiane marché local  : 3 400 €/m²
-- Écart au marché       : -7,0 %  →  Bonne affaire
-- Score opportunité     : 57/100
+Profil de l'acheteur : {profil}
 
-## Profil acheteur ciblé
-- Profil  : Résidence Principale  (rp)
-- Budget  : 380 000 €
+Raisonne en interne sur ces 4 axes avant de répondre :
+1. PRIX : L'écart au DVF est-il significatif ? Calcule la valeur médiane en € (surface × médiane/m²)
+2. PROFIL : Les critères prioritaires de ce profil sont-ils satisfaits ?
+3. RISQUES : Quels éléments de l'annonce peuvent cacher un problème ?
+4. NÉGOCIATION : Quel prix plancher est défendable avec les données DVF ?
 
-Génère maintenant la fiche de décision (### 1. Opportunité / ### 2. Risques
-/ ### 3. Conseil de négociation).
-Cite les chiffres fournis ci-dessus. 2-3 phrases par section, pas davantage.
+Puis réponds dans ce format exact :
+
+[Un paragraphe d'introduction de 2-3 phrases en langage naturel,
+sans titre ni bullet points, qui mentionne obligatoirement :
+- le prix/m² et l'écart à la médiane en % ET en €
+- ce que ça implique concrètement pour le profil de l'acheteur]
+
+## 🏠 Opportunité
+**Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
+**Verdict** : Sous-évalué / Dans la norme / Surévalué
+
+## ✅ Points forts
+- Point 1 (avec chiffre)
+- Point 2 (avec chiffre)
+
+## ⚠️ Points d'attention
+- Point 1
+- Point 2
+
+## 💡 Recommandation
+**Action** : Acheter / Négocier / Éviter
+**Fourchette de négociation** : entre Xa€ et Xb€
+**Justification** : 2 phrases max, chiffrées
 ```
 
-**Réponse obtenue (exemple représentatif) :**
+### Itération V3a — réflexion visible
 
-> ### 1. Opportunité
-> Ce T3 de 68 m² s'affiche à **3 162 €/m²**, soit **-7 %** sous la médiane DVF du marché local
-> (3 400 €/m²), confirmant une *bonne affaire* selon nos calculs (score 57/100). Pour un profil
-> résidence principale avec un budget de 380 000 €, le prix de 215 000 € laisse une marge confortable.
-> La cuisine rénovée réduit le budget travaux immédiats.
+Première tentative avec les balises `<reflexion>` affichées dans la réponse. La chaîne de raisonnement apparaissait telle quelle, ce qui n'est pas adapté à une interface utilisateur.
+
+> La réflexion était visible mais encombrante — le raisonnement était bon mais la mise en forme inappropriée pour l'affichage final.
+
+### Itération V3b — intro narrative (version finale)
+
+Raisonnement internalisé, réécrit sous forme d'un paragraphe d'introduction en langage naturel pour l'acheteur.
+
+**Réponse obtenue sur le bien de référence :**
+
+> Ce bien s'affiche à 3 162 €/m², soit une décote de 7% (-16 200 €) par rapport à la médiane du quartier. Pour un profil investisseur, cette différence de prix constitue un levier immédiat pour optimiser le rendement locatif et sécuriser la rentabilité de l'opération.
 >
-> ### 2. Risques
-> - **DPE non mentionné** — à exiger avant toute offre (impact sur les charges et la revente).
-> - **Copropriété** : vérifier les charges, le carnet d'entretien et les travaux votés en AG.
-> - "Vue mer partielle" : visite obligatoire à plusieurs heures pour valider luminosité et nuisances.
+> ## 🏠 Opportunité
 >
-> ### 3. Conseil de négociation
-> L'écart de -7 % valide une offre ferme à **210 000 €** (-2,3 % sur le prix affiché),
-> justifiée par l'absence d'information sur le DPE. Si le vendeur refuse, **212 500 €** reste
-> raisonnable. Ne pas dépasser le prix affiché : la donnée DVF vous est favorable.
+> **Prix/m²** : 3 162 €/m² vs médiane quartier 3 400 €/m² → écart : -7%
+> **Verdict** : Sous-évalué
+>
+> ## ✅ Points forts
+>
+> - Économie immédiate de 16 200 € par rapport à la valeur médiane du secteur
+> - Emplacement à haute tension locative (proximité plage du Mourillon)
+>
+> ## ⚠️ Points d'attention
+>
+> - État de l'appartement hors cuisine (vérifier le besoin de travaux pour maintenir le rendement)
+> - Vue mer "partielle" qui peut limiter la prime de loyer par rapport à une vue totale
+>
+> ## 💡 Recommandation
+>
+> **Action** : Négocier
+> **Fourchette de négociation** : entre 205 000 € et 210 000 €
+> **Justification** : Viser 208 000 € permettrait de porter la décote à environ 10% de la médiane. Cela offre une marge de sécurité financière pour d'éventuels travaux de mise aux normes.
 
-**Analyse — pourquoi V3 > V1 et V2 :**
-- Tous les chiffres cités sont traçables (issus de `scoring.py`, pas du LLM).
-- La règle absolue n°1 empêche l'invention de fourchettes de prix.
-- Le format est garanti par la contrainte système — parsable côté frontend.
-- La recommandation de négociation est cohérente avec l'écart calculé (-7 %).
+**Analyse :**
 
-**Trade-offs :**
-| Critère | V1 | V2 | V3 |
-|---|---|---|---|
-| Format garanti | ❌ | ✅ | ✅ |
-| Données vérifiables | ❌ | ❌ | ✅ |
-| Tokens (input) | ~80 | ~120 | ~350 |
-| Latence (Haiku) | ~0,8 s | ~0,9 s | ~1,2 s |
-| Fiabilité métier | Faible | Moyenne | **Haute** |
-
-Le surcoût de ~270 tokens d'input est marginal face au gain de fiabilité.
-Avec le prompt caching Anthropic (même system prompt), le coût des appels répétés
-est réduit de ~90 % sur la partie système.
+- Pourquoi V3 > V1 : le raisonnement interne force le modèle à contextualiser l'écart en euros (-16 200€) et non juste en pourcentage (-7%),ce qui rend l'analyse plus concrète pour l'acheteur.
+- Pourquoi V3 > V2 : même format structuré, mais l'intro narrative explique le raisonnement à l'acheteur en langage naturel — il comprend _pourquoi_ c'est une opportunité avant de lire les conclusions.
+- Trade-off : réponse légèrement plus longue (+20% de tokens vs V2), latence marginalement supérieure — largement justifié pour une décision d'achat immobilier.
 
 ---
 
 ## Conclusion
 
-**Version retenue en production : V3**
+Version retenue en production : **V3b**
 
-Raison principale : seule version où les affirmations chiffrées du LLM sont
-auditables et reproductibles — condition sine qua non pour un outil d'aide à la
-décision immobilière impliquant des budgets de 200–400 k€.
-
-La séparation stricte entre **calcul quantitatif** (Python from scratch) et
-**argumentation qualitative** (LLM) est le cœur de l'architecture NidBuyer V2.
+Raison principale : la chain-of-thought interne force le modèle à raisonner sur 4 axes (prix, profil, risques, négociation) avant de répondre, ce qui produit des justifications chiffrées et traçables. L'intro narrative en langage naturel rend l'analyse accessible à l'acheteur sans jargon technique. Le système prompt enrichi avec les 4 profils (RP, INV, RS, MIX) garantit une analyse automatiquement adaptée au contexte de chaque acheteur. Ce format combine la rigueur analytique de la V3 et la lisibilité de la V2.

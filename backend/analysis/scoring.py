@@ -48,7 +48,7 @@ CHARGES_NETTES_PCT = 0.25
 
 # Colonnes nécessaires pour l'analyse — on ne sélectionne que ce dont on a besoin
 _COLONNES_ANALYSE = (
-    "id, source, type_local, titre, "
+    "id, source, type_bien, titre, "
     "prix, surface, pieces, quartier, lien"
 )
 
@@ -56,7 +56,7 @@ _COLONNES_ANALYSE = (
 def _charger_depuis_supabase(
     supabase_client: "Client",
     commune: str | None = None,
-    type_local: str | None = None,
+    type_bien: str | None = None,
     page_size: int = 1000,
 ) -> list[dict]:
     """
@@ -65,7 +65,7 @@ def _charger_depuis_supabase(
     Args:
         supabase_client: instance supabase.Client déjà créée.
         commune:         filtre optionnel sur quartier (ex: "Mourillon").
-        type_local:      filtre optionnel sur type_local (ex: "Appartement").
+        type_bien:      filtre optionnel sur type_bien (ex: "Appartement").
         page_size:       nombre de lignes par appel (max Supabase = 1 000).
 
     Returns:
@@ -81,8 +81,8 @@ def _charger_depuis_supabase(
         )
         if commune:
             query = query.eq("quartier", commune)
-        if type_local:
-            query = query.eq("type_local", type_local)
+        if type_bien:
+            query = query.eq("type_bien", type_bien)
 
         response = query.range(offset, offset + page_size - 1).execute()
         batch = response.data
@@ -144,7 +144,7 @@ def stats_marche(
     *,
     supabase_client: "Client | None" = None,
     commune: str | None = None,
-    type_local: str | None = None,
+    type_bien: str | None = None,
 ) -> dict:
     """
     Calcule les indicateurs statistiques du marché (from scratch).
@@ -157,7 +157,7 @@ def stats_marche(
         annonces:        liste de dicts Supabase (optionnel si supabase_client fourni).
         supabase_client: client Supabase (optionnel si annonces fourni).
         commune:         filtre géographique (ignoré si annonces fourni).
-        type_local:      filtre type de bien (ignoré si annonces fourni).
+        type_bien:      filtre type de bien (ignoré si annonces fourni).
 
     Returns:
         dict avec : n_annonces, prix_moyen, prix_median, prix_min, prix_max,
@@ -174,7 +174,7 @@ def stats_marche(
             raise ValueError(
                 "Fournir soit annonces=[...] soit supabase_client=<Client>."
             )
-        annonces = _charger_depuis_supabase(supabase_client, commune, type_local)
+        annonces = _charger_depuis_supabase(supabase_client, commune, type_bien)
 
     surfaces, prix = _extract_pairs(annonces, "surface", "prix")
 
@@ -213,7 +213,7 @@ def mediane_prix_m2(
     *,
     supabase_client: "Client | None" = None,
     commune: str | None = None,
-    type_local: str | None = None,
+    type_bien: str | None = None,
 ) -> float | None:
     """
     Retourne uniquement la médiane du prix au m² pour un segment de marché.
@@ -223,7 +223,7 @@ def mediane_prix_m2(
         annonces,
         supabase_client=supabase_client,
         commune=commune,
-        type_local=type_local,
+        type_bien=type_bien,
     )
     return stats.get("prix_m2_median")
 

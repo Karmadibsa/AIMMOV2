@@ -37,7 +37,7 @@ def render_analysis(df: pd.DataFrame, df_dvf: pd.DataFrame | None = None) -> Non
         with st.container(border=True):
             st.markdown("#### 🏠 Types de biens")
             if not df.empty:
-                typ = df["type_local"].value_counts().reset_index()
+                typ = df["type_bien"].value_counts().reset_index()
                 typ.columns = ["Type", "Annonces"]
                 fig = px.pie(
                     typ, names="Type", values="Annonces",
@@ -61,9 +61,9 @@ def render_analysis(df: pd.DataFrame, df_dvf: pd.DataFrame | None = None) -> Non
             df_h = df.dropna(subset=["valeur_fonciere"])
             if not df_h.empty:
                 fig = px.histogram(
-                    df_h, x="valeur_fonciere", nbins=20, color="type_local",
+                    df_h, x="valeur_fonciere", nbins=20, color="type_bien",
                     color_discrete_map={"Appartement": "#E8714A", "Maison": "#1B2B4B"},
-                    labels={"valeur_fonciere": "Prix (€)", "type_local": "Type", "count": "Annonces"},
+                    labels={"valeur_fonciere": "Prix (€)", "type_bien": "Type", "count": "Annonces"},
                     template="simple_white",
                 )
                 fig.update_layout(
@@ -88,13 +88,13 @@ def render_analysis(df: pd.DataFrame, df_dvf: pd.DataFrame | None = None) -> Non
                 size_vals = df_sc["prix_m2"].fillna(0).astype(float).tolist()
                 fig = px.scatter(
                     df_sc, x="surface_reelle_bati", y="valeur_fonciere",
-                    color="type_local", size=size_vals,
+                    color="type_bien", size=size_vals,
                     color_discrete_map={"Appartement": "#E8714A", "Maison": "#1B2B4B"},
                     hover_name="titre",
                     hover_data={"nombre_pieces_principales": True, "source": True,
                                 "prix_m2": ":.0f", "surface_reelle_bati": False},
                     labels={"surface_reelle_bati": "Surface (m²)", "valeur_fonciere": "Prix (€)",
-                            "type_local": "Type", "prix_m2": "€/m²"},
+                            "type_bien": "Type", "prix_m2": "€/m²"},
                     template="simple_white", opacity=0.8,
                 )
                 fig.update_layout(
@@ -160,7 +160,7 @@ def render_analysis(df: pd.DataFrame, df_dvf: pd.DataFrame | None = None) -> Non
         if "Linéaire" in reg_mode:
             fig_lr = go.Figure()
             COLS = {"Appartement": "#E8714A", "Maison": "#1B2B4B"}
-            for ttype, grp in df_reg.groupby("type_local"):
+            for ttype, grp in df_reg.groupby("type_bien"):
                 c = COLS.get(ttype, "#8B5CF6")
                 xs = grp["surface_reelle_bati"].tolist()
                 ys = grp["valeur_fonciere"].tolist()
@@ -245,7 +245,7 @@ def render_analysis(df: pd.DataFrame, df_dvf: pd.DataFrame | None = None) -> Non
 
                 fig_mv = go.Figure()
                 COLS = {"Appartement": "#E8714A", "Maison": "#1B2B4B"}
-                for ttype, grp in df_mv.dropna(subset=["mv_prix_predit"]).groupby("type_local"):
+                for ttype, grp in df_mv.dropna(subset=["mv_prix_predit"]).groupby("type_bien"):
                     c = COLS.get(ttype, "#8B5CF6")
                     r2 = grp["mv_r2"].iloc[0] if "mv_r2" in grp.columns else None
                     r2_lbl = f" (R²={r2:.3f})" if r2 is not None else ""
@@ -454,7 +454,7 @@ def render_analysis(df: pd.DataFrame, df_dvf: pd.DataFrame | None = None) -> Non
             st.markdown("#### 📈 Tendances du marché & projection — Prix/m² médian mensuel")
 
             _trend = df_dvf[
-                df_dvf["type_local"].isin(["Appartement", "Maison"])
+                df_dvf["type_bien"].isin(["Appartement", "Maison"])
                 & (df_dvf["surface_reelle_bati"].fillna(0) > 9)
                 & (df_dvf["prix_m2"].notna())
                 & (df_dvf["prix_m2"] > 500)
@@ -463,10 +463,10 @@ def render_analysis(df: pd.DataFrame, df_dvf: pd.DataFrame | None = None) -> Non
             if not _trend.empty and "date_mutation" in _trend.columns:
                 _trend["mois"] = _trend["date_mutation"].dt.to_period("M").astype(str)
                 _agg = (
-                    _trend.groupby(["mois", "type_local"])["prix_m2"]
+                    _trend.groupby(["mois", "type_bien"])["prix_m2"]
                     .median()
                     .reset_index()
-                    .rename(columns={"prix_m2": "Prix/m² médian", "type_local": "Type"})
+                    .rename(columns={"prix_m2": "Prix/m² médian", "type_bien": "Type"})
                     .sort_values("mois")
                 )
 
@@ -559,7 +559,7 @@ def render_analysis(df: pd.DataFrame, df_dvf: pd.DataFrame | None = None) -> Non
             rows_cmp = []
             for ttype in ["Appartement", "Maison"]:
                 dvf_sub = df_dvf[
-                    (df_dvf["type_local"] == ttype)
+                    (df_dvf["type_bien"] == ttype)
                     & (df_dvf["prix_m2"].notna())
                     & (df_dvf["prix_m2"] > 500)
                     & (df_dvf["surface_reelle_bati"].fillna(0) > 9)
@@ -568,7 +568,7 @@ def render_analysis(df: pd.DataFrame, df_dvf: pd.DataFrame | None = None) -> Non
                     continue
                 dvf_median = float(dvf_sub.median())
 
-                ann_sub = df[(df["type_local"] == ttype) & df["prix_m2"].notna()]["prix_m2"]
+                ann_sub = df[(df["type_bien"] == ttype) & df["prix_m2"].notna()]["prix_m2"]
                 if len(ann_sub) < 2:
                     continue
                 ann_median = float(ann_sub.median())

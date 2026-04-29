@@ -57,7 +57,7 @@ def compute_regression(df_input: pd.DataFrame) -> pd.DataFrame:
       - _slope / _intercept : coefficients pour tracer la droite
     """
     results = []
-    for ttype, grp in df_input.groupby("type_local"):
+    for ttype, grp in df_input.groupby("type_bien"):
         grp = grp.dropna(subset=["valeur_fonciere", "surface_reelle_bati"]).copy().reset_index(drop=True)
         grp = grp[(grp["surface_reelle_bati"] > 10) & (grp["valeur_fonciere"] > 10_000)]
 
@@ -97,7 +97,7 @@ def compute_dvf_scores(
 
     Paramètres
     ----------
-    df_input : DataFrame des annonces (doit contenir type_local,
+    df_input : DataFrame des annonces (doit contenir type_bien,
                surface_reelle_bati, valeur_fonciere).
     models   : dict {"Appartement": {"slope": …, "intercept": …}, …}
                Si None, utilise DVF_REGRESSION (valeurs de repli de config.py).
@@ -117,7 +117,7 @@ def compute_dvf_scores(
 
     for ttype, coef in _models.items():
         mask = (
-            df["type_local"].eq(ttype)
+            df["type_bien"].eq(ttype)
             & df["surface_reelle_bati"].notna()
             & df["valeur_fonciere"].notna()
             & (df["surface_reelle_bati"] > 10)
@@ -260,7 +260,7 @@ def compute_multivariate_regression(df_input: pd.DataFrame) -> pd.DataFrame:
     """
     results = []
 
-    for ttype, grp in df_input.groupby("type_local"):
+    for ttype, grp in df_input.groupby("type_bien"):
         # reset_index évite le bug "cannot reindex on an axis with duplicate labels"
         # qui survient quand df_input a des index dupliqués (après merges)
         grp = grp.copy().reset_index(drop=True)

@@ -10,7 +10,7 @@ Responsabilités :
 
 Colonnes Supabase réelles (schéma actuel) :
     prix, surface, pieces, lien, quartier, date_publication, description,
-    dpe, ges, terrasse, balcon, parking, travaux, neuf, ascenseur, type_local
+    dpe, ges, terrasse, balcon, parking, travaux, neuf, ascenseur, type_bien
 
 Lancement de l'indexation initiale (depuis la racine de AIMMOV2/) :
     python -m backend.rag
@@ -22,6 +22,7 @@ import os
 from pathlib import Path
 
 import chromadb
+from chromadb.config import Settings as ChromaSettings
 from chromadb.utils import embedding_functions
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -37,17 +38,37 @@ EMBEDDING_MODEL  = "all-MiniLM-L6-v2"
 COLLECTION_NAME  = "annonces_toulon"
 INDEX_BATCH_SIZE = 100
 
-_client = chromadb.PersistentClient(path=CHROMA_PATH)
-_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-    model_name=EMBEDDING_MODEL
-)
+# Paramètres ChromaDB : désactive la télémétrie (évite le bruit dans les logs)
+_CHROMA_SETTINGS = ChromaSettings(anonymized_telemetry=False)
+
+# Initialisation paresseuse — créés au premier appel, pas à l'import.
+# Permet : (1) démarrage rapide d'uvicorn, (2) monkeypatching dans les tests.
+_client: chromadb.ClientAPI | None = None
+_ef = None
+
+
+def _get_client() -> chromadb.ClientAPI:
+    global _client
+    if _client is None:
+        path = os.environ.get("CHROMA_PATH", CHROMA_PATH)
+        _client = chromadb.PersistentClient(path=path, settings=_CHROMA_SETTINGS)
+    return _client
+
+
+def _get_ef():
+    global _ef
+    if _ef is None:
+        _ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name=EMBEDDING_MODEL
+        )
+    return _ef
 
 
 def get_collection() -> chromadb.Collection:
     """Retourne (ou crée) la collection ChromaDB des annonces."""
-    return _client.get_or_create_collection(
+    return _get_client().get_or_create_collection(
         name=COLLECTION_NAME,
-        embedding_function=_ef,
+        embedding_function=_get_ef(),
         metadata={"hnsw:space": "cosine"},
     )
 
@@ -62,8 +83,8 @@ def _build_document(annonce: dict) -> str:
     """
     parts = []
 
-    if annonce.get("type_local"):
-        parts.append(annonce["type_local"])
+    if annonce.get("type_bien"):
+        parts.append(annonce["type_bien"])
 
     if annonce.get("surface") is not None:
         parts.append(f"{annonce['surface']} m²")
@@ -122,12 +143,13 @@ def _build_metadata(annonce: dict) -> dict:
 
     return {
         # ── Identification ──────────────────────────────────────────────────
+        "id":         _s(annonce.get("id")),
         "lien":       _s(annonce.get("lien")),
         "titre":      _s(annonce.get("titre")),
         "source":     _s(annonce.get("source")),
         # ── Géographie ─────────────────────────────────────────────────────
         "quartier":   _s(annonce.get("quartier")),
-        "type_local": _s(annonce.get("type_local")),
+        "type_bien": _s(annonce.get("type_bien")),
         # ── Chiffres (utilisés dans les filtres where des Personas) ────────
         "prix":       _f(annonce.get("prix")),
         "surface":    _f(annonce.get("surface")),
@@ -151,7 +173,9 @@ def _build_metadata(annonce: dict) -> dict:
 def _build_chroma_id(annonce: dict) -> str:
     """
     ID stable pour ChromaDB basé sur le lien (déduplication idempotente).
-    Fallback sur l'id Supabase (uuid) si le lien est absent.
+    Préfixe "ann_" conservé pour la compatibilité avec les données existantes.
+    L'ID original (ex: "001") est stocké dans les métadonnées et retourné par
+    search_similar() via **metadatas[i] qui écrase le champ "id" ChromaDB.
     """
     lien = annonce.get("lien") or annonce.get("url") or annonce.get("url_source")
     if lien:
@@ -197,7 +221,7 @@ def indexer_annonces(annonces: list[dict]) -> int:
 
 # Colonnes sélectionnées — schéma réel de la table annonces
 _SELECT_COLONNES = (
-    "id, source, type_local, titre, "
+    "id, source, type_bien, titre, "
     "prix, surface, pieces, quartier, lien, date_publication, "
     "description, "
     "dpe, ges, travaux, neuf, terrasse, balcon, parking, ascenseur, "
@@ -373,7 +397,7 @@ if __name__ == "__main__":
         for i, r in enumerate(resultats, 1):
             print(
                 f"  #{i}  distance={r['distance']}  "
-                f"{r.get('type_local', '?')} - "
+                f"{r.get('type_bien', '?')} - "
                 f"{r.get('surface', '?')} m2 - "
                 f"{r.get('prix', '?')} euros - "
                 f"{r.get('quartier', '?')}  DPE:{r.get('dpe', '?')}"

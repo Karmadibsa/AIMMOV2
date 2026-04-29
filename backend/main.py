@@ -2,20 +2,36 @@
 NidBuyer V2 — Backend FastAPI
 """
 
+import asyncio
+import concurrent.futures
 import json
 import logging
 import os
+import re as _re
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
+from queue import Queue
 
+from dotenv import load_dotenv
 import google.generativeai as genai
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+# Chargement du .env avant tout accès à os.environ
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 from .ingestion import sync
 
 logger = logging.getLogger(__name__)
+
+# Modèle chat configurable via GEMMA_MODEL dans .env
+_CHAT_MODEL    = os.environ.get("GEMMA_MODEL",          "gemma-4-27b-it")
+# Modèle léger pour l'extraction JSON (rapide, moins coûteux)
+_EXTRACT_MODEL = os.environ.get("GEMINI_EXTRACT_MODEL", "gemini-1.5-flash")
 
 # ── Configuration Globale Gemini ──────────────────────────────────────────────
 _api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -27,6 +43,49 @@ else:
 scheduler = AsyncIOScheduler()
 
 
+# ── Utilitaire nettoyage sorties LLM ──────────────────────────────────────────────
+
+_THINKING_PREFIXES = (
+    "input:", "goal:", "plan:", "step ", "note:", "observation:",
+    "thought:", "reasoning:", "analysis:", "context:", "output:",
+    "réflexion:", "raisonnement:", "étape ", "objectif:", "analyse:",
+    "greeting:", "language:",
+)
+
+def _clean_llm_output(text: str) -> str:
+    """Extrait <ANSWER>…</ANSWER> ou supprime les artefacts de raisonnement Gemma.
+
+    Priorité absolue : si <ANSWER> est présent, TOUT ce qui est en dehors est supprimé
+    (y compris <reflexion>, <think>, et tout préambule).
+    """
+    if not text:
+        return text
+
+    # Passage 1 : suppression de tous les blocs de raisonnement AVANT extraction
+    cleaned = _re.sub(
+        r"<(reflexion|think|thinking|raisonnement)>.*?</(reflexion|think|thinking|raisonnement)>",
+        "", text, flags=_re.DOTALL | _re.IGNORECASE
+    )
+
+    # Passage 2 : extraction stricte entre <ANSWER>…</ANSWER>
+    match = _re.search(r"<ANSWER>(.*?)</ANSWER>", cleaned, _re.DOTALL | _re.IGNORECASE)
+    if match:
+        return _re.sub(r"\n{3,}", "\n\n", match.group(1).strip())
+
+    # Fallback : si pas de balise ANSWER, nettoyage heuristique
+    lines = [l for l in cleaned.splitlines()
+             if not any(l.strip().lower().startswith(p) for p in _THINKING_PREFIXES)]
+    text = "\n".join(lines)
+    lower = text.lower()
+    for marker in ("## ", "**", "bonjour", "je ", "voici", "bien sûr",
+                   "pour votre", "j'ai trouvé", "parmi les"):
+        idx = lower.find(marker)
+        if 0 < idx < 400:
+            text = text[idx:]
+            break
+    return _re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler.add_job(sync, "cron", hour=7, minute=0)
@@ -36,6 +95,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="NidBuyer API", version="0.2.0", lifespan=lifespan)
+
+# ── CORS ─────────────────────────────────────────────────────────────────────
+# allow_origins=["*"] couvre Streamlit Cloud + tout frontend pendant la phase de lancement.
+# Restreindre à l'URL Streamlit exacte une fois le domaine stable.
+_allowed_origins = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ── Modèles ───────────────────────────────────────────────────────────────────
@@ -66,12 +137,46 @@ class ChatRequest(BaseModel):
     n_context: int = 5
 
 
+# ── Nettoyage sortie LLM ─────────────────────────────────────────────────────
+
+_THINKING_PREFIXES = (
+    "input:", "goal:", "plan:", "step ", "note:", "observation:",
+    "thought:", "reasoning:", "analysis:", "context:", "output:",
+    "réflexion:", "raisonnement:", "étape ", "objectif:", "analyse:",
+)
+
+def _clean_llm_output(text: str) -> str:
+    """Extrait <ANSWER>…</ANSWER> ou supprime les artefacts de raisonnement Gemma."""
+    if not text:
+        return text
+    # 1. Balise <ANSWER> (méthode primaire)
+    match = _re.search(r"<ANSWER>(.*?)</ANSWER>", text, _re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # 2. Blocs <think>
+    text = _re.sub(r"<think>.*?</think>", "", text, flags=_re.DOTALL | _re.IGNORECASE)
+    # 3. Lignes de raisonnement préfixées
+    lines = [l for l in text.splitlines()
+             if not any(l.strip().lower().startswith(p) for p in _THINKING_PREFIXES)]
+    text = "\n".join(lines)
+    # 4. Tronquer avant le premier marqueur conversationnel
+    lower = text.lower()
+    for marker in ("bonjour", "je ", "voici", "bien sûr", "d'accord",
+                   "pour votre", "j'ai trouvé", "parmi les"):
+        idx = lower.find(marker)
+        if 0 < idx < 300:
+            text = text[idx:]
+            break
+    return _re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 # ── Helpers partagés ──────────────────────────────────────────────────────────
 
 def _build_chroma_filters(
     budget_max: float | None,
     surface_min: float | None,
     nb_pieces_min: int | None,
+    type_bien: str | None = None,
 ) -> dict:
     """Construit un filtre ChromaDB $and depuis les contraintes du profil."""
     conditions: list[dict] = [{"prix": {"$gt": 0.0}}]
@@ -81,6 +186,8 @@ def _build_chroma_filters(
         conditions.append({"surface": {"$gte": float(surface_min)}})
     if nb_pieces_min:
         conditions.append({"nb_pieces": {"$gte": float(nb_pieces_min)}})
+    if type_bien in ("Appartement", "Maison"):
+        conditions.append({"type_bien": {"$eq": type_bien}})
     return {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
 
@@ -277,118 +384,146 @@ def chat_ia(req: ChatRequest):
         logger.error("🚨 ÉCHEC API CHAT: GEMINI_API_KEY manquant. Vérifiez votre fichier .env.")
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY manquant dans .env. Impossible d'appeler le LLM.")
 
-    # ── 1. Extraction du profil acheteur depuis la conversation ───────────────
-    history_text = "\n".join(
-        f"{m.role.upper()}: {m.content}"
-        for m in req.history[-8:]
-    )
-
-    extraction_prompt = (
-        "Analyse cette conversation d'un acheteur immobilier à Toulon "
-        "et extrais son profil. Retourne UNIQUEMENT un JSON valide.\n\n"
-        f"HISTORIQUE :\n{history_text}\n"
-        f"NOUVEAU MESSAGE : {req.question}\n\n"
-        'JSON attendu (utilise null si inconnu) :\n'
-        '{\n'
-        '  "intention": "rp" | "rs" | "investissement" | "mixte" | null,\n'
-        '  "budget_max": <float en euros ou null>,\n'
-        '  "surface_min": <float en m² ou null>,\n'
-        '  "nb_pieces_min": <int ou null>,\n'
-        '  "quartiers": [<liste de quartiers mentionnés>],\n'
-        '  "description_libre": "<résumé des souhaits en 1 phrase>"\n'
-        '}'
-    )
-
     profil_detecte: dict = {
-        "intention": None, "budget_max": None, "surface_min": None,
-        "nb_pieces_min": None, "quartiers": [], "description_libre": "",
+        "intention": None, "type_bien": None, "budget_max": None,
+        "surface_min": None, "nb_pieces_min": None,
+        "quartiers": [], "description_libre": "",
     }
 
-    try:
-        extract_model = genai.GenerativeModel(
-            os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
-            generation_config=genai.GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=250,
-                response_mime_type="application/json",
-            ),
+    # ── Détection analyse directe de fiche (bypass extraction + ChromaDB) ─────
+    # La question envoyée par le bouton "Analyser" commence toujours par ce texte
+    # (début du template fiche_decision_v3.txt formaté).
+    _is_fiche = req.question.lstrip().startswith("Voici les informations sur le bien")
+
+    biens: list[dict] = []
+
+    if not _is_fiche:
+        # ── 1. Extraction du profil acheteur (modèle flash = rapide) ─────────
+        history_text = "\n".join(
+            f"{m.role.upper()}: {m.content}"
+            for m in req.history[-8:]
         )
-        raw = extract_model.generate_content(extraction_prompt).text.strip()
-        # Nettoyage des blocs ```json si présents
-        if raw.startswith("```"):
-            parts = raw.split("```")
-            raw = parts[1].lstrip("json").strip() if len(parts) > 1 else raw
-        profil_detecte = json.loads(raw)
-    except Exception as e:
-        logger.warning("Extraction profil échouée : %s", e)
-
-    # ── 2. Recherche ChromaDB avec filtres extraits ───────────────────────────
-    query_parts = [req.question]
-    if profil_detecte.get("intention") == "rs":
-        query_parts.append("vue mer résidence secondaire plage")
-    elif profil_detecte.get("intention") == "investissement":
-        query_parts.append("rendement locatif studio T2 centre")
-    if profil_detecte.get("quartiers"):
-        query_parts.extend(profil_detecte["quartiers"])
-    query = " ".join(query_parts)
-
-    filtre = _build_chroma_filters(
-        profil_detecte.get("budget_max"),
-        profil_detecte.get("surface_min"),
-        profil_detecte.get("nb_pieces_min"),
-    )
-    biens = search_similar(query=query, n_results=req.n_context, filtre_meta=filtre)
-
-    # ── 3. Contexte biens pour Gemini ─────────────────────────────────────────
-    ctx_lines: list[str] = []
-    for i, b in enumerate(biens, 1):
-        pm2 = ""
-        if b.get("prix") and b.get("surface") and b["surface"] > 0:
-            pm2 = f" ({b['prix'] / b['surface']:.0f} €/m²)"
-        ctx_lines.append(
-            f"Bien #{i} — {b.get('titre', 'N/A')}\n"
-            f"  Quartier : {b.get('quartier', '?')} | "
-            f"Prix : {b.get('prix', '?')} €{pm2} | "
-            f"Surface : {b.get('surface', '?')} m² | "
-            f"Pièces : {b.get('nb_pieces', '?')} | DPE : {b.get('dpe', '?')}\n"
-            f"  {str(b.get('document', ''))[:200]}"
+        extraction_prompt = (
+            "Analyse cette conversation d'un acheteur immobilier à Toulon "
+            "et extrais son profil. Retourne UNIQUEMENT un JSON valide.\n\n"
+            f"HISTORIQUE :\n{history_text}\n"
+            f"NOUVEAU MESSAGE : {req.question}\n\n"
+            'JSON attendu (utilise null si inconnu) :\n'
+            '{\n'
+            '  "intention": "rp" | "rs" | "investissement" | "mixte" | null,\n'
+            '  "type_bien": "Appartement" | "Maison" | null,\n'
+            '  "budget_max": <float en euros ou null>,\n'
+            '  "surface_min": <float en m² ou null>,\n'
+            '  "nb_pieces_min": <int ou null>,\n'
+            '  "quartiers": [<liste de quartiers mentionnés>],\n'
+            '  "description_libre": "<résumé des souhaits en 1 phrase>"\n'
+            '}'
         )
-    ctx = "\n\n".join(ctx_lines) if ctx_lines else "Aucun bien trouvé pour cette requête."
+        try:
+            extract_model = genai.GenerativeModel(
+                _EXTRACT_MODEL,   # gemini-1.5-flash : extraction rapide
+                generation_config=genai.GenerationConfig(
+                    temperature=0.0,
+                    max_output_tokens=300,
+                    response_mime_type="application/json",
+                ),
+            )
+            raw = extract_model.generate_content(extraction_prompt).text.strip()
+            if raw.startswith("```"):
+                parts = raw.split("```")
+                raw = parts[1].lstrip("json").strip() if len(parts) > 1 else raw
+            profil_detecte = json.loads(raw)
+        except Exception as e:
+            logger.warning("Extraction profil échouée : %s", e)
 
-    # ── 4. Réponse conversationnelle Gemini ───────────────────────────────────
-    system_chat = (
-        "Tu es NidBuyer, conseiller immobilier expert à Toulon. "
-        "Tu accompagnes l'acheteur de façon personnalisée et chaleureuse. "
-        "Si tu ne connais pas encore le profil, pose 1 question ciblée "
-        "(budget ? usage ? quartier préféré ?). "
-        "Si tu as des biens en contexte, présente le(s) plus pertinent(s) "
-        "avec des chiffres précis. "
-        "Tu te bases UNIQUEMENT sur les biens fournis — jamais de données inventées. "
-        "Sois concis (max 3 paragraphes)."
-    )
+        # ── 2. Recherche ChromaDB avec filtres extraits ───────────────────────
+        query_parts = [req.question]
+        if profil_detecte.get("intention") == "rs":
+            query_parts.append("vue mer résidence secondaire plage")
+        elif profil_detecte.get("intention") == "investissement":
+            query_parts.append("rendement locatif studio T2 centre")
+        if profil_detecte.get("quartiers"):
+            query_parts.extend(profil_detecte["quartiers"])
+        query = " ".join(query_parts)
 
-    # Reconstruction de l'historique pour Gemini (format alternant user/model)
-    gemini_history: list[dict] = []
-    for m in req.history[-6:]:
-        role = "model" if m.role == "assistant" else "user"
-        gemini_history.append({"role": role, "parts": [m.content]})
+        filtre = _build_chroma_filters(
+            profil_detecte.get("budget_max"),
+            profil_detecte.get("surface_min"),
+            profil_detecte.get("nb_pieces_min"),
+            profil_detecte.get("type_bien"),
+        )
+        biens = search_similar(query=query, n_results=req.n_context, filtre_meta=filtre)
 
-    profil_resume = profil_detecte.get("description_libre") or "À préciser"
-    user_msg = (
-        f"Biens disponibles dans la base NidBuyer :\n{ctx}\n\n"
-        f"Profil détecté : {profil_resume}\n"
-        f"Question : {req.question}"
-    )
+    # ── 3. Contexte biens + construction du message Gemini ────────────────────
+    if _is_fiche:
+        # Analyse directe : le prompt contient déjà toutes les données du bien
+        system_chat = (
+            "Tu es NidBuyer, expert en immobilier à Toulon. "
+            "Analyse le bien décrit avec précision, structure ta réponse en markdown. "
+            "Sois factuel, chiffré, et adapte ton conseil au profil de l'acheteur. "
+            "Va directement à l'analyse sans préambule ni formule de politesse."
+        )
+        gemini_history: list[dict] = []
+        user_msg = req.question   # le prompt fiche_decision_v3 complet
+    else:
+        ctx_lines: list[str] = []
+        for i, b in enumerate(biens, 1):
+            pm2 = ""
+            if b.get("prix") and b.get("surface") and b["surface"] > 0:
+                pm2 = f" ({b['prix'] / b['surface']:.0f} €/m²)"
+            ctx_lines.append(
+                f"Bien #{i} — {b.get('titre', 'N/A')}\n"
+                f"  Quartier : {b.get('quartier', '?')} | "
+                f"Prix : {b.get('prix', '?')} €{pm2} | "
+                f"Surface : {b.get('surface', '?')} m² | "
+                f"Pièces : {b.get('nb_pieces', '?')} | DPE : {b.get('dpe', '?')}\n"
+                f"  {str(b.get('document', ''))[:200]}"
+            )
+        ctx = "\n\n".join(ctx_lines) if ctx_lines else "Aucun bien trouvé pour cette requête."
 
+        system_chat = (
+            "TU ES UN CONSEILLER IMMOBILIER, PAS UN CHERCHEUR. "
+            "Ne produis aucun texte avant la balise <ANSWER>. "
+            "Tu es NidBuyer, conseiller immobilier expert à Toulon. "
+            "Tu accompagnes l'acheteur de façon personnalisée et chaleureuse. "
+            "Si tu ne connais pas encore le profil, pose 1 question ciblée "
+            "(budget ? usage ? quartier préféré ?). "
+            "Si tu as des biens en contexte, présente le(s) plus pertinent(s) "
+            "avec des chiffres précis. "
+            "Tu te bases UNIQUEMENT sur les biens fournis — jamais de données inventées. "
+            "Sois concis (max 3 paragraphes). "
+            "RÈGLE ABSOLUE : ta réponse doit commencer IMMÉDIATEMENT par <ANSWER> "
+            "et se terminer par </ANSWER>. Rien avant, rien après. "
+            "Exemple : <ANSWER>Bonjour ! Voici ce que j'ai trouvé…</ANSWER>"
+        )
+        gemini_history = []
+        for m in req.history[-6:]:
+            role = "model" if m.role == "assistant" else "user"
+            gemini_history.append({"role": role, "parts": [m.content]})
+
+        profil_resume = profil_detecte.get("description_libre") or "À préciser"
+        user_msg = (
+            f"Biens disponibles dans la base NidBuyer :\n{ctx}\n\n"
+            f"Profil détecté : {profil_resume}\n"
+            f"Question : {req.question}\n\n"
+            "Rappel : entoure ta réponse de <ANSWER>…</ANSWER>."
+        )
+
+    # ── 4. Réponse Gemini ─────────────────────────────────────────────────────
     reponse_text = "Je rencontre une difficulté momentanée. Réessayez dans quelques instants."
     try:
         chat_model = genai.GenerativeModel(
-            os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it"),
+            _CHAT_MODEL,
             system_instruction=system_chat,
-            generation_config=genai.GenerationConfig(max_output_tokens=600, temperature=0.7),
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=800,
+                temperature=0.3 if _is_fiche else 0.7,
+                stop_sequences=[] if _is_fiche else ["Input:", "Reasoning:", "Plan:", "Step 1:", "Goal:"],
+            ),
         )
         chat_session = chat_model.start_chat(history=gemini_history)
-        reponse_text = chat_session.send_message(user_msg).text
+        raw_text = chat_session.send_message(user_msg).text
+        reponse_text = raw_text.strip() if _is_fiche else _clean_llm_output(raw_text)
     except Exception as e:
         logger.error("Gemini chat error : %s", e)
 
@@ -429,8 +564,12 @@ def liste_biens(limit: int = 5000):
     """
     from supabase import create_client
     
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
+    if not url or not key:
+        raise HTTPException(status_code=503, detail="SUPABASE_URL / SUPABASE_KEY manquants")
     try:
-        sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+        sb = create_client(url, key)
         response = sb.table("annonces").select("*").limit(limit).execute()
         return {"biens": response.data, "total": len(response.data)}
     except Exception as e:
@@ -522,24 +661,37 @@ def admin_sync(background_tasks: BackgroundTasks, dry_run: bool = False):
 def admin_status():
     """Statut de la base : annonces stockées (Supabase) et indexées (ChromaDB)."""
     from supabase import create_client
-    from .rag import get_collection
+    from .rag import _get_client, COLLECTION_NAME
 
+    # Compte ChromaDB sans charger le modèle SentenceTransformer (7s au 1er appel).
+    # _get_client() ouvre le SQLite uniquement ; get_collection sans embedding_function
+    # est instantané.
     try:
-        n_chroma = get_collection().count()
+        n_chroma = _get_client().get_collection(COLLECTION_NAME).count()
     except Exception:
-        n_chroma = -1
+        n_chroma = 0  # collection inexistante = 0 annonces indexées
 
+    # Compte Supabase avec timeout strict pour ne pas bloquer si l'URL est fictive.
+    def _count_supabase() -> int:
+        _url = os.environ.get("SUPABASE_URL", "")
+        _key = os.environ.get("SUPABASE_KEY", "")
+        sb = create_client(_url, _key)
+        return sb.table("annonces").select("id", count="exact").execute().count
+
+    _pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
-        sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
-        n_supabase = sb.table("annonces").select("id", count="exact").execute().count
+        n_supabase = _pool.submit(_count_supabase).result(timeout=3.0)
     except Exception:
         n_supabase = -1
+    finally:
+        _pool.shutdown(wait=False)  # ne bloque pas sur le thread Supabase en attente
 
     last_sync = Path("data/.last_sync")
     ok = n_supabase >= 0 and n_chroma >= 0
     return {
-        "supabase_count": n_supabase,
-        "chromadb_count": n_chroma,
-        "derniere_sync":  last_sync.read_text() if last_sync.exists() else "jamais",
-        "status":         "ok" if ok else "degraded",
+        "supabase_count":   n_supabase,
+        "chromadb_count":   n_chroma,
+        "annonces_indexees": n_chroma,   # alias pour test_auto_eval.py
+        "derniere_sync":    last_sync.read_text() if last_sync.exists() else "jamais",
+        "status":           "ok" if ok else "degraded",
     }
