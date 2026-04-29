@@ -122,6 +122,7 @@ class ProfilAcheteur(BaseModel):
 
 class AlerteProfil(BaseModel):
     email: str
+    nom_alerte: str = "Mes critères"
     profil: ProfilAcheteur
 
 
@@ -585,10 +586,69 @@ def detail_bien(bien_id: str):
 
 @app.post("/alerte")
 def creer_alerte(alerte: AlerteProfil):
-    raise HTTPException(status_code=501, detail="Non implémenté")
+    from .alertes import sauvegarder_profil
+    from .gmail_service import envoyer_email_gmail
+
+    try:
+        # Étape 1 : sauvegarde
+        sauvegarder_profil(
+            email=alerte.email,
+            nom_alerte=alerte.nom_alerte,
+            profil=alerte.profil.model_dump(),
+        )
+        logger.info(f"✅ Profil sauvegardé pour {alerte.email}")
+    except Exception as e:
+        logger.error(f"❌ Erreur sauvegarde profil : {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur sauvegarde : {str(e)}")
+
+    try:
+        # Étape 2 : email de confirmation
+        html_confirmation = f"""..."""  # votre HTML existant
+
+        success = envoyer_email_gmail(
+            alerte.email,
+            "🏠 NidBuyer — Votre alerte a bien été enregistrée",
+            html_confirmation,
+        )
+        if not success:
+            logger.warning(f"⚠️ Email non envoyé (retour False) pour {alerte.email}")
+    except Exception as e:
+        logger.error(f"❌ Erreur envoi Gmail : {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur Gmail : {str(e)}")
+
+    return {"status": "ok", "message": f"Alerte enregistrée pour {alerte.email}"}
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────
+@app.get("/admin/test-gmail")
+def test_gmail():
+    from .gmail_service import get_gmail_service
+    import base64
+    from email.mime.text import MIMEText
+
+    # Test 1 : connexion
+    try:
+        service = get_gmail_service()
+        # Force le rafraîchissement du token
+        import google.auth.transport.requests
+        service._http.credentials.refresh(google.auth.transport.requests.Request())
+        token_ok = "✅ Token rafraîchi avec succès"
+    except Exception as e:
+        return {"etape": "connexion OAuth2", "erreur": str(e)}
+
+    # Test 2 : envoi
+    try:
+        msg = MIMEText("<p>Test</p>", "html")
+        msg["to"] = "projectaimmo@gmail.com"
+        msg["from"] = "projectaimmo@gmail.com"
+        msg["subject"] = "Test NidBuyer"
+        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+        result = service.users().messages().send(
+            userId="me", body={"raw": raw}
+        ).execute()
+        return {"token": token_ok, "envoi": "✅ OK", "message_id": result.get("id")}
+    except Exception as e:
+        return {"token": token_ok, "envoi": "❌ Échec", "erreur": str(e)}
 
 @app.post("/admin/sync")
 def admin_sync(background_tasks: BackgroundTasks, dry_run: bool = False):

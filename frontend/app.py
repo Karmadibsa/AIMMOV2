@@ -49,6 +49,9 @@ df_dvf_raw = load_dvf_raw(str(DVF_CSV_PATH))
 # ── Session state ─────────────────────────────────────────────────────────────
 for _k, _v in [("asst_step", 0), ("asst_type", None),
                ("asst_budget", None), ("asst_surface", None),
+
+               ("show_alert_form", False), ("alert_filters_saved", False)]:
+
                ("user_role", "rp"), ("chat_history", None)]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -115,6 +118,98 @@ with st.sidebar:
     keyword = st.text_input("🔍 Mot-clé", placeholder="terrasse, parking…")
 
     prix_baisse_only = st.checkbox("📉 Prix en baisse uniquement")
+
+    st.markdown("---")
+    st.markdown("### 📧 Alertes Quotidiennes")
+    
+    # Résumé des filtres
+    st.caption("📋 Vos critères actuels :")
+    criteria_text = []
+    if type_filtre != "Tous":
+        criteria_text.append(f"• Type : {type_filtre}")
+    if budget_max < 500_000:
+        criteria_text.append(f"• Budget max : {budget_max:,}€")
+    if surface_min > 0:
+        criteria_text.append(f"• Surface min : {surface_min}m²")
+    if pieces_min > 0:
+        criteria_text.append(f"• Pièces min : {pieces_min}")
+    if quartier_filtre:
+        communes_txt = ", ".join(quartier_filtre[:2])
+        if len(quartier_filtre) > 2:
+            communes_txt += f", +{len(quartier_filtre)-2}"
+        criteria_text.append(f"• Communes : {communes_txt}")
+    if keyword:
+        criteria_text.append(f"• Mot-clé : {keyword}")
+    
+    if criteria_text:
+        st.markdown("\n".join(criteria_text), unsafe_allow_html=True)
+    else:
+        st.info("Tous les critères")
+    
+    # Bouton enregistrer les filtres
+    if st.button("💾 Enregistrer ces filtres", use_container_width=True, type="primary"):
+        st.session_state.show_alert_form = True
+        st.session_state.alert_filters_saved = True
+        st.rerun()
+    
+    # Afficher le formulaire email APRÈS le clic
+    if st.session_state.show_alert_form:
+        st.markdown("#### ✉️ Recevoir les alertes par email")
+        st.caption("Vos filtres seront vérifiés chaque jour à 9h30")
+        
+        email_alerte = st.text_input(
+            "Votre email *",
+            placeholder="vous@email.com",
+            key="email_alert_input"
+        )
+        
+        nom_alerte = st.text_input(
+            "Nom de l'alerte (optionnel)",
+            placeholder="ex: Studio Toulon centre",
+            key="nom_alert_input",
+            value="Mes critères"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ Confirmer", use_container_width=True):
+                if not email_alerte or "@" not in email_alerte:
+                    st.error("❌ Veuillez entrer un email valide")
+                else:
+                    import httpx
+                    try:
+                        api_url = "http://localhost:8000"
+                        payload = {
+                            "email": email_alerte,
+                            "nom_alerte": nom_alerte,
+                            "profil": {
+                                "intention": "rp",
+                                "budget_max": float(budget_max) if budget_max < 500_000 else None,
+                                "surface_min": float(surface_min) if surface_min > 0 else None,
+                                "nb_pieces_min": int(pieces_min) if pieces_min > 0 else None,
+                                "type_bien": type_filtre if type_filtre != "Tous" else None,
+                                "quartiers": quartier_filtre if quartier_filtre else [],
+                                "description_libre": keyword if keyword else ""
+                            }
+                        }
+                        
+                        response = httpx.post(f"{api_url}/alerte", json=payload, timeout=10.0)
+                        if response.status_code == 200:
+                            result = response.json()
+                            st.success(f"✅ {result.get('message', 'Alerte enregistrée !')}")
+                            st.info("📬 Vous recevrez un email chaque jour à 9h30 avec les annonces correspondant à vos critères")
+                            st.session_state.show_alert_form = False
+                            st.session_state.alert_filters_saved = False
+                        else:
+                            st.error(f"❌ Erreur : {response.text}")
+                    except Exception as e:
+                        st.error(f"❌ Erreur connexion API : {e}")
+                        st.caption("💡 Assurez-vous que le backend FastAPI est en cours d'exécution : `uvicorn backend.main:app --reload`")
+        
+        with col2:
+            if st.button("❌ Annuler", use_container_width=True):
+                st.session_state.show_alert_form = False
+                st.rerun()
 
     st.markdown("---")
     if not df_raw.empty and "date_mutation" in df_raw.columns:
