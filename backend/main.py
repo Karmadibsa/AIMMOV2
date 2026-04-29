@@ -137,6 +137,13 @@ class ChatRequest(BaseModel):
     n_context: int = 5
 
 
+class AnalyseImagesRequest(BaseModel):
+    photos: list[str]                # URLs des photos du bien
+    titre: str | None = None
+    type_bien: str | None = None
+    max_images: int = 4              # plafond pour limiter le coût/latence
+
+
 # ── Nettoyage sortie LLM ─────────────────────────────────────────────────────
 
 _THINKING_PREFIXES = (
@@ -553,6 +560,39 @@ def chat_ia(req: ChatRequest):
         "biens_trouves":    biens_out,
         "n_biens_contexte": len(biens),
     }
+
+
+# ── POST /api/analyse-images ──────────────────────────────────────────────────
+
+@app.post("/api/analyse-images")
+def analyse_images(req: AnalyseImagesRequest):
+    """
+    Analyse vision d'un bien immobilier à partir des URLs de ses photos.
+    Toute la logique (téléchargement, prompt, appel Gemini, nettoyage de la sortie)
+    est dans vision.llm.evaluate.analyser_bien_par_urls().
+    """
+    from vision.llm.evaluate import analyser_bien_par_urls
+
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="GEMINI_API_KEY manquant — analyse vision désactivée.",
+        )
+
+    try:
+        return analyser_bien_par_urls(
+            urls=req.photos,
+            titre=req.titre,
+            type_bien=req.type_bien,
+            max_images=req.max_images,
+        )
+    except ValueError as e:
+        # Aucune URL exploitable / téléchargements échoués
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        # Échec côté Gemini
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Routes stubs (biens individuels) ─────────────────────────────────────────

@@ -1,12 +1,31 @@
 """Onglet 2 — Liste des biens avec tableau + fiches détaillées."""
 
+import json as _json
+import os
 import sys
 from pathlib import Path
 
 import pandas as pd
+import requests
 import streamlit as st
 
 from ui.components import market_badge_html, photo_carousel, tags_html
+
+_API_URL = os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
+
+
+def _photos_to_urls(photos_raw) -> list[str]:
+    """Normalise photos (JSON string ou list) en list[str] d'URLs http(s)."""
+    if isinstance(photos_raw, str):
+        try:
+            photos = _json.loads(photos_raw)
+        except Exception:
+            return []
+    elif isinstance(photos_raw, list):
+        photos = photos_raw
+    else:
+        return []
+    return [p for p in photos if isinstance(p, str) and p.startswith("http")]
 
 # Import du moteur k-NN from scratch
 try:
@@ -275,8 +294,50 @@ def render_list(df: pd.DataFrame, user_role: str = "rp") -> None:
             elif ep_f > 10: lbl += "  ⚠️"
 
         with st.expander(lbl):
-            # ── Bouton Analyser — pleine largeur, tout en haut ────────────────
+            # ── Boutons Analyser — pleine largeur, tout en haut ────────────────
             _role_label = _PROFIL_LABELS.get(user_role, user_role)
+
+            _photo_urls = _photos_to_urls(row.get("photos"))
+            _vision_key = f"vision_result_{global_idx}_p{page}"
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button(
+                    f"🔍 Analyser avec NidBuyer — profil {_role_label}",
+                    key=f"analyse_{global_idx}_p{page}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    _desc_clean = str(row.get("description", "")).strip()
+                    if _desc_clean in ("", "nan"):
+                        _desc_clean = "Non disponible"
+                    try:
+                        _template = _PROMPT_PATH.read_text(encoding="utf-8")
+                    except FileNotFoundError:
+                        _template = "{fiche_structuree}\n\n{description_annonce}\n\nProfil : {profil}"
+                    _prompt = _template.format(
+                        fiche_structuree=_build_fiche(row),
+                        description_annonce=_desc_clean,
+                        profil=_role_label,
+                    )
+                    _titre_court = titre[:80] + ("…" if len(titre) > 80 else "")
+                    st.session_state["pending_analysis"]       = _prompt
+                    st.session_state["pending_analysis_label"] = (
+                        f"Analyse ce bien pour mon profil {_role_label} : {_titre_court}"
+                    )
+                    st.session_state["goto_assistant"] = True
+                    st.rerun()
+
+            with col_b:
+                _vision_btn = st.button(
+                    "🖼️ Analyser les images du bien",
+                    key=f"vision_{global_idx}_p{page}",
+                    use_container_width=True,
+                    disabled=(len(_photo_urls) == 0),
+                    help=("Aucune photo disponible pour ce bien."
+                          if not _photo_urls else
+                          f"Analyse vision IA sur {min(len(_photo_urls), 4)} photo(s) "
+                          "pour estimer l'état du bien et les travaux à prévoir."),
             if st.button(
                 f"🔍 Analyser avec NidBuyer — profil {_role_label}",
                 key=f"analyse_{global_idx}_p{page}",
@@ -300,8 +361,56 @@ def render_list(df: pd.DataFrame, user_role: str = "rp") -> None:
                 st.session_state["pending_analysis_label"] = (
                     f"Analyse ce bien pour mon profil {_role_label} : \"{_titre_court}\""
                 )
-                st.session_state["goto_assistant"] = True
-                st.rerun()
+                if _vision_btn and _photo_urls:
+                    with st.spinner("🤖 Analyse des images en cours…"):
+                        try:
+                            _r = requests.post(
+                                f"{_API_URL}/api/analyse-images",
+                                json={
+                                    "photos":    _photo_urls,
+                                    "titre":     titre,
+                                    "type_bien": str(row.get("type_bien", "")) or None,
+                                    "max_images": 4,
+                                },
+                                timeout=120,
+                            )
+                            if _r.status_code == 200:
+                                st.session_state[_vision_key] = _r.json()
+                            else:
+                                st.session_state[_vision_key] = {
+                                    "error": f"Erreur {_r.status_code} : {_r.text[:200]}"
+                                }
+                        except requests.exceptions.ConnectionError:
+                            st.session_state[_vision_key] = {
+                                "error": "Backend FastAPI injoignable (lancez `uvicorn backend.main:app --reload`)."
+                            }
+                        except Exception as _e:
+                            st.session_state[_vision_key] = {"error": f"Erreur : {_e}"}
+                    st.rerun()
+
+            # ── Affichage du résultat de l'analyse vision ─────────────────────
+            _vision_res = st.session_state.get(_vision_key)
+            if _vision_res:
+                if "error" in _vision_res:
+                    st.error(f"❌ {_vision_res['error']}")
+                else:
+                    _n_img = _vision_res.get("n_images", 0)
+                    _model = _vision_res.get("model", "Gemini Vision")
+                    st.markdown(
+                        f'<div class="section-card" style="padding:16px 20px;'
+                        f'background:#FFF7F2;border-left:4px solid #E8714A;margin-top:8px;">'
+                        f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                        f'margin-bottom:10px;">'
+                        f'<b style="color:#1B2B4B;font-size:15px;">🖼️ Analyse vision du bien</b>'
+                        f'<small style="color:#64748B;">{_n_img} photo(s) · {_model}</small>'
+                        f'</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(_vision_res.get("analyse", "—"))
+                    if st.button("🗑️ Masquer l'analyse",
+                                 key=f"vision_clear_{global_idx}_p{page}"):
+                        st.session_state.pop(_vision_key, None)
+                        st.rerun()
 
             left, right = st.columns([1, 2], gap="medium")
 
