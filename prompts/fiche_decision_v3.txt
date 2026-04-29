@@ -20,6 +20,7 @@ sans titre ni bullet points, qui mentionne obligatoirement :
 - le prix/m² et l'écart à la médiane en % ET en €
 - ce que ça implique concrètement pour le profil de l'acheteur]
 
+<ANSWER>
 ## 🏠 Opportunité
 **Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
 **Verdict** : Sous-évalué / Dans la norme / Surévalué
@@ -36,3 +37,4 @@ sans titre ni bullet points, qui mentionne obligatoirement :
 **Action** : Acheter / Négocier / Éviter
 **Fourchette de négociation** : entre Xa€ et Xb€
 **Justification** : 2 phrases max, chiffrées
+</ANSWER>

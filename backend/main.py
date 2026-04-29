@@ -53,25 +53,34 @@ _THINKING_PREFIXES = (
 )
 
 def _clean_llm_output(text: str) -> str:
-    """Extrait <ANSWER>…</ANSWER> ou supprime les artefacts de raisonnement Gemma."""
+    """Extrait <ANSWER>…</ANSWER> ou supprime les artefacts de raisonnement Gemma.
+
+    Priorité absolue : si <ANSWER> est présent, TOUT ce qui est en dehors est supprimé
+    (y compris <reflexion>, <think>, et tout préambule).
+    """
     if not text:
         return text
-    # Extraction entre balises <ANSWER>
-    match = _re.search(r"<ANSWER>(.*?)</ANSWER>", text, _re.DOTALL)
+
+    # Passage 1 : suppression de tous les blocs de raisonnement AVANT extraction
+    cleaned = _re.sub(
+        r"<(reflexion|think|thinking|raisonnement)>.*?</(reflexion|think|thinking|raisonnement)>",
+        "", text, flags=_re.DOTALL | _re.IGNORECASE
+    )
+
+    # Passage 2 : extraction stricte entre <ANSWER>…</ANSWER>
+    match = _re.search(r"<ANSWER>(.*?)</ANSWER>", cleaned, _re.DOTALL | _re.IGNORECASE)
     if match:
-        return match.group(1).strip()
-    # Suppression des balises <think>
-    text = _re.sub(r"<think>.*?</think>", "", text, flags=_re.DOTALL | _re.IGNORECASE)
-    # Filtrage lignes qui ressemblent au raisonnement
-    lines = [l for l in text.splitlines()
+        return _re.sub(r"\n{3,}", "\n\n", match.group(1).strip())
+
+    # Fallback : si pas de balise ANSWER, nettoyage heuristique
+    lines = [l for l in cleaned.splitlines()
              if not any(l.strip().lower().startswith(p) for p in _THINKING_PREFIXES)]
     text = "\n".join(lines)
-    # Détection du vrai début de la réponse
     lower = text.lower()
-    for marker in ("bonjour", "je ", "voici", "bien sûr", "d'accord",
-                   "pour votre", "j'ai trouvé", "parmi les", "##", "**"):
+    for marker in ("## ", "**", "bonjour", "je ", "voici", "bien sûr",
+                   "pour votre", "j'ai trouvé", "parmi les"):
         idx = lower.find(marker)
-        if 0 < idx < 300:
+        if 0 < idx < 400:
             text = text[idx:]
             break
     return _re.sub(r"\n{3,}", "\n\n", text).strip()
