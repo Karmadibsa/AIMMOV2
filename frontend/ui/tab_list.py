@@ -131,23 +131,56 @@ _PROMPT_PATH = Path(__file__).parent.parent.parent / "prompts" / "fiche_decision
 
 def _build_fiche(row: pd.Series) -> str:
     lines = []
-    if pd.notna(row.get("type_bien")):                lines.append(f"Type : {row['type_bien']}")
+
+    titre = str(row.get("titre", "")).strip()
+    if titre and titre != "nan":
+        lines.append(f"Titre : {titre}")
+
+    if pd.notna(row.get("type_bien")) and str(row["type_bien"]) != "nan":
+        lines.append(f"Type : {row['type_bien']}")
+
     prix = row.get("valeur_fonciere")
-    if pd.notna(prix):                                 lines.append(f"Prix : {prix:,.0f} €")
+    if pd.notna(prix):
+        lines.append(f"Prix affiché : {prix:,.0f} €")
+
     surf = row.get("surface_reelle_bati")
-    if pd.notna(surf):                                 lines.append(f"Surface : {surf:.0f} m²")
+    if pd.notna(surf):
+        lines.append(f"Surface : {surf:.0f} m²")
+
     pm2 = row.get("prix_m2")
-    if pd.notna(pm2):                                  lines.append(f"Prix/m² : {pm2:,.0f} €/m²")
+    if pd.notna(pm2):
+        lines.append(f"Prix/m² : {pm2:,.0f} €/m²")
+    elif pd.notna(prix) and pd.notna(surf) and surf > 0:
+        # Calcul à la volée si la colonne est absente
+        lines.append(f"Prix/m² (calculé) : {prix / surf:,.0f} €/m²")
+
     pieces = row.get("nombre_pieces_principales")
-    if pd.notna(pieces):                               lines.append(f"Pièces : {int(pieces)}")
+    if pd.notna(pieces):
+        lines.append(f"Pièces : {int(pieces)}")
+
     commune = row.get("nom_commune")
-    if pd.notna(commune):                              lines.append(f"Quartier : {commune}")
+    if pd.notna(commune) and str(commune) != "nan":
+        lines.append(f"Quartier / Commune : {commune}")
+
     dpe = row.get("dpe")
-    if pd.notna(dpe) and str(dpe) not in ("nan", ""):  lines.append(f"DPE : {dpe}")
+    if pd.notna(dpe) and str(dpe) not in ("nan", ""):
+        lines.append(f"DPE : {dpe}")
+
     ecart_pct = row.get("ecart_pct")
-    if pd.notna(ecart_pct):                            lines.append(f"Écart vs marché : {ecart_pct:+.1f}%")
+    if pd.notna(ecart_pct):
+        lines.append(f"Écart vs régression marché : {ecart_pct:+.1f}%")
+
     prix_predit = row.get("prix_predit")
-    if pd.notna(prix_predit):                          lines.append(f"Prix estimé : {prix_predit:,.0f} €")
+    if pd.notna(prix_predit):
+        lines.append(f"Prix estimé par le modèle : {prix_predit:,.0f} €")
+
+    source = str(row.get("source", "")).strip()
+    if source and source not in ("nan", ""):
+        lines.append(f"Source : {source}")
+
+    if not lines:
+        return "Données structurées non disponibles — analyse basée sur la description uniquement."
+
     return "\n".join(lines)
 
 
@@ -265,7 +298,7 @@ def render_list(df: pd.DataFrame, user_role: str = "rp") -> None:
                 _titre_court = titre[:80] + ("…" if len(titre) > 80 else "")
                 st.session_state["pending_analysis"]       = _prompt
                 st.session_state["pending_analysis_label"] = (
-                    f"Analyse ce bien pour mon profil {_role_label} : {_titre_court}"
+                    f"Analyse ce bien pour mon profil {_role_label} : \"{_titre_court}\""
                 )
                 st.session_state["goto_assistant"] = True
                 st.rerun()
