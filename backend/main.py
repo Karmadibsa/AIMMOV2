@@ -29,9 +29,9 @@ from .ingestion import sync
 logger = logging.getLogger(__name__)
 
 # Modèle chat configurable via GEMMA_MODEL dans .env
-_CHAT_MODEL    = os.environ.get("GEMMA_MODEL",          "gemma-4-27b-it")
-# Modèle léger pour l'extraction JSON (rapide, moins coûteux)
-_EXTRACT_MODEL = os.environ.get("GEMINI_EXTRACT_MODEL", "gemini-1.5-flash")
+_CHAT_MODEL    = os.environ.get("GEMMA_MODEL",          "gemma-4-26b-a4b-it")
+# Extraction JSON : même modèle que le chat (gemini-1.5-flash retiré de v1beta)
+_EXTRACT_MODEL = os.environ.get("GEMINI_EXTRACT_MODEL", "gemma-4-26b-a4b-it")
 
 # ── Configuration Globale Gemini ──────────────────────────────────────────────
 _api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -41,49 +41,6 @@ else:
     logger.warning("⚠️ Clé GEMINI_API_KEY introuvable dans l'environnement au démarrage.")
 
 scheduler = AsyncIOScheduler()
-
-
-# ── Utilitaire nettoyage sorties LLM ──────────────────────────────────────────────
-
-_THINKING_PREFIXES = (
-    "input:", "goal:", "plan:", "step ", "note:", "observation:",
-    "thought:", "reasoning:", "analysis:", "context:", "output:",
-    "réflexion:", "raisonnement:", "étape ", "objectif:", "analyse:",
-    "greeting:", "language:",
-)
-
-def _clean_llm_output(text: str) -> str:
-    """Extrait <ANSWER>…</ANSWER> ou supprime les artefacts de raisonnement Gemma.
-
-    Priorité absolue : si <ANSWER> est présent, TOUT ce qui est en dehors est supprimé
-    (y compris <reflexion>, <think>, et tout préambule).
-    """
-    if not text:
-        return text
-
-    # Passage 1 : suppression de tous les blocs de raisonnement AVANT extraction
-    cleaned = _re.sub(
-        r"<(reflexion|think|thinking|raisonnement)>.*?</(reflexion|think|thinking|raisonnement)>",
-        "", text, flags=_re.DOTALL | _re.IGNORECASE
-    )
-
-    # Passage 2 : extraction stricte entre <ANSWER>…</ANSWER>
-    match = _re.search(r"<ANSWER>(.*?)</ANSWER>", cleaned, _re.DOTALL | _re.IGNORECASE)
-    if match:
-        return _re.sub(r"\n{3,}", "\n\n", match.group(1).strip())
-
-    # Fallback : si pas de balise ANSWER, nettoyage heuristique
-    lines = [l for l in cleaned.splitlines()
-             if not any(l.strip().lower().startswith(p) for p in _THINKING_PREFIXES)]
-    text = "\n".join(lines)
-    lower = text.lower()
-    for marker in ("## ", "**", "bonjour", "je ", "voici", "bien sûr",
-                   "pour votre", "j'ai trouvé", "parmi les"):
-        idx = lower.find(marker)
-        if 0 < idx < 400:
-            text = text[idx:]
-            break
-    return _re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 @asynccontextmanager
@@ -138,35 +95,96 @@ class ChatRequest(BaseModel):
 
 # ── Nettoyage sortie LLM ─────────────────────────────────────────────────────
 
+# Préfixes de lignes de raisonnement interne que Gemma peut émettre
 _THINKING_PREFIXES = (
     "input:", "goal:", "plan:", "step ", "note:", "observation:",
     "thought:", "reasoning:", "analysis:", "context:", "output:",
     "réflexion:", "raisonnement:", "étape ", "objectif:", "analyse:",
+    # Gemma echo du system prompt
+    "user input:", "role:", "constraints:", "instruction:", "system:",
+    "user:", "assistant:", "rules:", "règles:", "format:",
 )
 
+# Regex détectant un paragraphe de raisonnement interne :
+#   - commence par *Mot  (ex: *Critique:*, *Let's*, *Wait,*, *Draft*)
+#   - ou contient *mot:* (marqueur italic raisonnement)
+_REASONING_PARA_RE = _re.compile(
+    r'^\s*\*[A-Za-zÀ-ÿ]'      # débute par *Mot
+    r'|\*[A-Za-zÀ-ÿ][^*]*:\*',  # ou contient *mot:*
+    _re.IGNORECASE,
+)
+
+
+def _is_reasoning_para(p: str) -> bool:
+    """Renvoie True si le paragraphe est du raisonnement interne à supprimer."""
+    return bool(_REASONING_PARA_RE.search(p)) or any(
+        p.strip().lower().startswith(pr) for pr in _THINKING_PREFIXES
+    )
+
+
 def _clean_llm_output(text: str) -> str:
-    """Extrait <ANSWER>…</ANSWER> ou supprime les artefacts de raisonnement Gemma."""
+    """
+    Extrait le contenu utile de la sortie LLM.
+
+    Ordre de priorité :
+      1. <ANSWER>…</ANSWER> complet  → retourne uniquement ce contenu.
+      2. <ANSWER> sans fermeture     → retourne tout ce qui suit la balise.
+      3. Supprime les blocs balisés, puis isole le DERNIER bloc de paragraphes
+         propres — le raisonnement de Gemma est toujours EN TÊTE, la réponse EN QUEUE.
+      4. Dernier recours : 3 dernières phrases.
+    """
     if not text:
         return text
-    # 1. Balise <ANSWER> (méthode primaire)
-    match = _re.search(r"<ANSWER>(.*?)</ANSWER>", text, _re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    # 2. Blocs <think>
-    text = _re.sub(r"<think>.*?</think>", "", text, flags=_re.DOTALL | _re.IGNORECASE)
-    # 3. Lignes de raisonnement préfixées
-    lines = [l for l in text.splitlines()
-             if not any(l.strip().lower().startswith(p) for p in _THINKING_PREFIXES)]
-    text = "\n".join(lines)
-    # 4. Tronquer avant le premier marqueur conversationnel
-    lower = text.lower()
-    for marker in ("bonjour", "je ", "voici", "bien sûr", "d'accord",
-                   "pour votre", "j'ai trouvé", "parmi les"):
-        idx = lower.find(marker)
-        if 0 < idx < 300:
-            text = text[idx:]
-            break
-    return _re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    # Stratégie pour modèles "thinking" (Gemma 4) :
+    # Le raisonnement est TOUJOURS en tête ; la réponse est TOUJOURS en queue.
+    # On cherche donc DEPUIS LA FIN du texte, pas depuis le début.
+
+    # 1. Dernière paire complète </ANSWER> ← on remonte pour trouver le <ANSWER> associé.
+    # Cela évite de capturer le raisonnement encadré par des balises anciennes.
+    text_upper = text.upper()
+    close_pos = text_upper.rfind("</ANSWER>")
+    if close_pos > 0:
+        open_pos = text_upper.rfind("<ANSWER>", 0, close_pos)
+        if open_pos >= 0:
+            extracted = text[open_pos + len("<ANSWER>"):close_pos].strip()
+            if len(extracted) > 20:
+                return extracted
+
+    # 2. Pas de </ANSWER> (réponse tronquée) — prendre tout ce qui suit
+    # le DERNIER <ANSWER> ouvert dans le texte.
+    last_open = text_upper.rfind("<ANSWER>")
+    if last_open >= 0:
+        extracted = text[last_open + len("<ANSWER>"):].strip()
+        if len(extracted) > 20:
+            return extracted
+
+    # 3. Supprimer les blocs de raisonnement balisés
+    cleaned = _re.sub(r"<think>.*?</think>",        "", text,    flags=_re.S | _re.I)
+    cleaned = _re.sub(r"<reflexion>.*?</reflexion>", "", cleaned, flags=_re.S | _re.I)
+    cleaned = _re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
+    # Remonter depuis la fin pour trouver le dernier bloc de paragraphes propres
+    paras = [p.strip() for p in cleaned.split("\n\n") if p.strip()]
+    result: list[str] = []
+    for para in reversed(paras):
+        if _is_reasoning_para(para):
+            if result:   # on a déjà accumulé des paragraphes propres → on arrête
+                break
+            # sinon on continue à remonter (on ignore ce para de raisonnement)
+        else:
+            result.insert(0, para)
+
+    if result:
+        return "\n\n".join(result)
+
+    # 4. Dernier recours : 3 dernières phrases
+    sentences = _re.split(r'(?<=[.!?])\s+', cleaned)
+    sentences = [s for s in sentences if len(s.strip()) > 10]
+    if sentences:
+        return " ".join(sentences[-3:])
+
+    return _re.sub(r"<[^>]+>", "", text).strip()
 
 
 # ── Helpers partagés ──────────────────────────────────────────────────────────
@@ -379,6 +397,12 @@ def chat_ia(req: ChatRequest):
     """
     from .rag import search_similar
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+
+    # ── DEBUG : état de démarrage ─────────────────────────────────────────────
+    print(f"\n{'#'*60}", flush=True)
+    print(f"[CHAT] modèle={_CHAT_MODEL}  |  clé={'OK ('+api_key[:8]+'…)' if api_key else '❌ MANQUANTE'}", flush=True)
+    print(f"[CHAT] question={req.question[:120]!r}", flush=True)
+
     if not api_key:
         logger.error("🚨 ÉCHEC API CHAT: GEMINI_API_KEY manquant. Vérifiez votre fichier .env.")
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY manquant dans .env. Impossible d'appeler le LLM.")
@@ -420,50 +444,88 @@ def chat_ia(req: ChatRequest):
         )
         try:
             extract_model = genai.GenerativeModel(
-                _EXTRACT_MODEL,   # gemini-1.5-flash : extraction rapide
+                _EXTRACT_MODEL,
+                # response_mime_type non supporté par les modèles Gemma — on parse manuellement
                 generation_config=genai.GenerationConfig(
                     temperature=0.0,
-                    max_output_tokens=300,
-                    response_mime_type="application/json",
+                    max_output_tokens=250,
                 ),
             )
             raw = extract_model.generate_content(extraction_prompt).text.strip()
-            if raw.startswith("```"):
+            # Nettoyer les balises markdown éventuelles
+            if "```" in raw:
                 parts = raw.split("```")
                 raw = parts[1].lstrip("json").strip() if len(parts) > 1 else raw
+            # Extraire le premier bloc JSON valide si le modèle a ajouté du texte autour
+            json_match = _re.search(r"\{.*\}", raw, _re.S)
+            if json_match:
+                raw = json_match.group(0)
             profil_detecte = json.loads(raw)
         except Exception as e:
             logger.warning("Extraction profil échouée : %s", e)
 
-        # ── 2. Recherche ChromaDB avec filtres extraits ───────────────────────
-        query_parts = [req.question]
-        if profil_detecte.get("intention") == "rs":
-            query_parts.append("vue mer résidence secondaire plage")
-        elif profil_detecte.get("intention") == "investissement":
-            query_parts.append("rendement locatif studio T2 centre")
-        if profil_detecte.get("quartiers"):
-            query_parts.extend(profil_detecte["quartiers"])
-        query = " ".join(query_parts)
-
-        filtre = _build_chroma_filters(
-            profil_detecte.get("budget_max"),
-            profil_detecte.get("surface_min"),
-            profil_detecte.get("nb_pieces_min"),
-            profil_detecte.get("type_bien"),
-        )
-        biens = search_similar(query=query, n_results=req.n_context, filtre_meta=filtre)
+        # ── 2. Recherche ChromaDB — seulement si le profil est assez qualifié ──
+        # On n'envoie des biens que si ≥ 2 critères concrets sont connus.
+        # Évite de polluer la conversation avec des suggestions prématurées.
+        _criteria = sum([
+            bool(profil_detecte.get("budget_max")),
+            bool(profil_detecte.get("surface_min")),
+            bool(profil_detecte.get("quartiers")),
+            bool(profil_detecte.get("nb_pieces_min")),
+        ])
+        if _criteria >= 2:
+            query_parts = [req.question]
+            if profil_detecte.get("intention") == "rs":
+                query_parts.append("vue mer résidence secondaire plage")
+            elif profil_detecte.get("intention") == "investissement":
+                query_parts.append("rendement locatif studio T2 centre")
+            if profil_detecte.get("quartiers"):
+                query_parts.extend(profil_detecte["quartiers"])
+            query = " ".join(query_parts)
+            filtre = _build_chroma_filters(
+                profil_detecte.get("budget_max"),
+                profil_detecte.get("surface_min"),
+                profil_detecte.get("nb_pieces_min"),
+                profil_detecte.get("type_bien"),
+            )
+            biens = search_similar(query=query, n_results=3, filtre_meta=filtre)
 
     # ── 3. Contexte biens + construction du message Gemini ────────────────────
     if _is_fiche:
         # Analyse directe : le prompt contient déjà toutes les données du bien
         system_chat = (
             "Tu es NidBuyer, expert en immobilier à Toulon. "
-            "Analyse le bien décrit avec précision, structure ta réponse en markdown. "
-            "Sois factuel, chiffré, et adapte ton conseil au profil de l'acheteur. "
-            "Va directement à l'analyse sans préambule ni formule de politesse."
+            "Analyse le bien décrit avec précision et fournis une fiche de décision structurée. "
+            "RÈGLE ABSOLUE : place L'INTÉGRALITÉ de ta réponse entre <ANSWER> et </ANSWER>. "
+            "Ne place RIEN en dehors de ces balises — ni raisonnement, ni préambule, ni conclusion. "
+            "Respecte exactement ce format markdown dans les balises :\n"
+            "## 🏠 Opportunité\n"
+            "## ✅ Points forts\n"
+            "## ⚠️ Points d'attention\n"
+            "## 💡 Recommandation\n"
+            "Chaque section doit contenir des valeurs réelles chiffrées issues des données fournies. "
+            "Interdiction absolue d'utiliser '...', des crochets vides ou des données inventées. "
+            "IMPORTANT : commence ta réponse IMMÉDIATEMENT par <ANSWER> — aucun texte avant."
         )
         gemini_history: list[dict] = []
-        user_msg = req.question   # le prompt fiche_decision_v3 complet
+
+        # Raccourcir le prompt fiche pour éviter les timeouts Gemma "thinking".
+        # Le system prompt contient déjà les instructions de format → on ne garde
+        # que les données structurées + description (les instructions du bas sont inutiles).
+        _q = req.question
+        # Couper à "INTERDICTION ABSOLUE" (début des instructions répétées)
+        _cut = _q.upper().find("INTERDICTION ABSOLUE")
+        if _cut > 0:
+            _q = _q[:_cut].strip()
+        # Tronquer la description à 400 chars si elle est plus longue
+        _ann = "ANNONCE ORIGINALE :"
+        _ann_pos = _q.upper().find(_ann)
+        if _ann_pos >= 0:
+            _before = _q[:_ann_pos + len(_ann)]
+            _after  = _q[_ann_pos + len(_ann):].strip()[:400]
+            _q = _before + "\n" + _after
+        user_msg = _q
+        print(f"[FICHE] prompt raccourci : {len(req.question)} → {len(user_msg)} chars", flush=True)
     else:
         ctx_lines: list[str] = []
         for i, b in enumerate(biens, 1):
@@ -481,31 +543,45 @@ def chat_ia(req: ChatRequest):
         ctx = "\n\n".join(ctx_lines) if ctx_lines else "Aucun bien trouvé pour cette requête."
 
         system_chat = (
-            "TU ES UN CONSEILLER IMMOBILIER, PAS UN CHERCHEUR. "
-            "Ne produis aucun texte avant la balise <ANSWER>. "
             "Tu es NidBuyer, conseiller immobilier expert à Toulon. "
-            "Tu accompagnes l'acheteur de façon personnalisée et chaleureuse. "
-            "Si tu ne connais pas encore le profil, pose 1 question ciblée "
-            "(budget ? usage ? quartier préféré ?). "
-            "Si tu as des biens en contexte, présente le(s) plus pertinent(s) "
-            "avec des chiffres précis. "
-            "Tu te bases UNIQUEMENT sur les biens fournis — jamais de données inventées. "
-            "Sois concis (max 3 paragraphes). "
-            "RÈGLE ABSOLUE : ta réponse doit commencer IMMÉDIATEMENT par <ANSWER> "
-            "et se terminer par </ANSWER>. Rien avant, rien après. "
-            "Exemple : <ANSWER>Bonjour ! Voici ce que j'ai trouvé…</ANSWER>"
+            "PHASE 1 — QUALIFICATION : Si tu ne connais pas encore le budget ET "
+            "(la surface souhaitée ou le nombre de pièces), pose UNE SEULE question "
+            "chaleureuse pour obtenir l'information manquante la plus importante. "
+            "Ordre de priorité : 1) budget max, 2) type de bien (appartement/maison), "
+            "3) surface ou nombre de pièces, 4) quartier préféré. "
+            "PHASE 2 — RECOMMANDATION : Dès que tu as le budget ET au moins un critère "
+            "de taille (surface ou pièces), présente EXACTEMENT 3 biens parmi ceux fournis. "
+            "Pour chaque bien : titre, prix en €, surface en m², prix/m², quartier, "
+            "et une phrase expliquant pourquoi ce bien correspond au profil de l'acheteur. "
+            "Tu ne mentionnes QUE les biens fournis — jamais de données inventées. "
+            "RÈGLE ABSOLUE : place toute ta réponse entre <ANSWER> et </ANSWER>. "
+            "Réponds en français, de façon directe et chaleureuse. "
+            "IMPORTANT : commence IMMÉDIATEMENT par <ANSWER> — aucun texte ni raisonnement avant."
         )
         gemini_history = []
         for m in req.history[-6:]:
             role = "model" if m.role == "assistant" else "user"
             gemini_history.append({"role": role, "parts": [m.content]})
 
-        profil_resume = profil_detecte.get("description_libre") or "À préciser"
+        profil_resume = profil_detecte.get("description_libre") or "Profil à qualifier"
+        if biens:
+            ctx_label = f"3 biens sélectionnés pour ce profil ({profil_resume})"
+            instruction = (
+                "Présente ces 3 biens en PHASE 2 : pour chacun, indique titre, prix, "
+                "surface, €/m², quartier, et une phrase de justification liée au profil. "
+                "Entoure ta réponse de <ANSWER> et </ANSWER>."
+            )
+        else:
+            ctx_label = "Aucun bien (profil insuffisant)"
+            instruction = (
+                "Tu es en PHASE 1 : pose une seule question chaleureuse pour qualifier le projet. "
+                "Entoure ta réponse de <ANSWER> et </ANSWER>."
+            )
         user_msg = (
-            f"Biens disponibles dans la base NidBuyer :\n{ctx}\n\n"
+            f"{ctx_label} :\n{ctx}\n\n"
             f"Profil détecté : {profil_resume}\n"
-            f"Question : {req.question}\n\n"
-            "Rappel : entoure ta réponse de <ANSWER>…</ANSWER>."
+            f"Message de l'acheteur : {req.question}\n\n"
+            f"{instruction}"
         )
 
     # ── 4. Réponse Gemini ─────────────────────────────────────────────────────
@@ -515,17 +591,35 @@ def chat_ia(req: ChatRequest):
             _CHAT_MODEL,
             system_instruction=system_chat,
             generation_config=genai.GenerationConfig(
-                max_output_tokens=800,
-                temperature=0.3 if _is_fiche else 0.7,
-                stop_sequences=[] if _is_fiche else ["Input:", "Reasoning:", "Plan:", "Step 1:", "Goal:"],
+                max_output_tokens=520 if _is_fiche else 700,
+                temperature=0.2 if _is_fiche else 0.5,
+                stop_sequences=[] if _is_fiche else [
+                    "Input:", "Reasoning:", "Step 1:", "Goal:", "Plan:",
+                ],
             ),
         )
         chat_session = chat_model.start_chat(history=gemini_history)
-        print(f"\n{'='*60}\nDEBUG – PROMPT ENVOYÉ ({len(user_msg)} chars):\n{user_msg[:800]}\n{'='*60}\n")
+        print(f"\n{'='*60}", flush=True)
+        print(f"[PROMPT] {len(user_msg)} chars | is_fiche={_is_fiche} | modèle={_CHAT_MODEL}", flush=True)
+        print(user_msg[:800], flush=True)
+        print("="*60, flush=True)
+
         raw_text = chat_session.send_message(user_msg).text
+
+        print(f"\n{'─'*60}", flush=True)
+        print(f"[RAW LLM] {len(raw_text)} chars :", flush=True)
+        print(raw_text, flush=True)
+        print("─"*60, flush=True)
+
         reponse_text = _clean_llm_output(raw_text)
+        print(f"[CLEAN] {len(reponse_text)} chars : {reponse_text[:300]!r}", flush=True)
+        print("="*60, flush=True)
     except Exception as e:
+        import traceback
+        print(f"\n[ERREUR GEMINI] {type(e).__name__}: {e}", flush=True)
+        print(traceback.format_exc(), flush=True)
         logger.error("Gemini chat error : %s", e)
+        reponse_text = f"⚠️ Erreur LLM ({type(e).__name__}) : {e}"
 
     # ── 5. Formatage des biens pour le frontend ───────────────────────────────
     biens_out = [

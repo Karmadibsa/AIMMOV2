@@ -20,24 +20,26 @@ _THINKING_PREFIXES = (
 )
 
 def _clean_response(text: str) -> str:
-    """Extrait <ANSWER>…</ANSWER> ou supprime les artefacts de raisonnement Gemma."""
+    """Extrait <ANSWER>…</ANSWER> ou supprime les artefacts de raisonnement.
+    Le backend a déjà nettoyé — cette passe frontend est un filet de sécurité."""
     if not text:
         return text
-    match = _re.search(r"<ANSWER>(.*?)</ANSWER>", text, _re.DOTALL)
+    # Cas : backend n'a pas extrait les balises (ex. timeout partiel)
+    match = _re.search(r"<ANSWER>(.*?)</ANSWER>", text, _re.DOTALL | _re.IGNORECASE)
     if match:
-        return match.group(1).strip()
-    text = _re.sub(r"<think>.*?</think>", "", text, flags=_re.DOTALL | _re.IGNORECASE)
+        extracted = match.group(1).strip()
+        if extracted:
+            return extracted
+    # Supprimer les blocs internes visibles
+    text = _re.sub(r"<think>.*?</think>",       "", text, flags=_re.DOTALL | _re.IGNORECASE)
+    text = _re.sub(r"<reflexion>.*?</reflexion>", "", text, flags=_re.DOTALL | _re.IGNORECASE)
     lines = [l for l in text.splitlines()
              if not any(l.strip().lower().startswith(p) for p in _THINKING_PREFIXES)]
-    text = "\n".join(lines)
-    lower = text.lower()
-    for marker in ("bonjour", "je ", "voici", "bien sûr", "d'accord",
-                   "pour votre", "j'ai trouvé", "parmi les"):
-        idx = lower.find(marker)
-        if 0 < idx < 300:
-            text = text[idx:]
-            break
-    return _re.sub(r"\n{3,}", "\n\n", text).strip()
+    cleaned = _re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    # Fallback : retourner le texte sans balises XML plutôt qu'une chaîne vide
+    if not cleaned:
+        return _re.sub(r"<[^>]+>", "", text).strip()
+    return cleaned
 
 
 def post_chat(question: str, history: list[dict], n_context: int = 5) -> dict:
