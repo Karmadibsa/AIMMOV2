@@ -522,8 +522,9 @@ def chat_ia(req: ChatRequest):
             ),
         )
         chat_session = chat_model.start_chat(history=gemini_history)
+        print(f"\n{'='*60}\nDEBUG – PROMPT ENVOYÉ ({len(user_msg)} chars):\n{user_msg[:800]}\n{'='*60}\n")
         raw_text = chat_session.send_message(user_msg).text
-        reponse_text = raw_text.strip() if _is_fiche else _clean_llm_output(raw_text)
+        reponse_text = _clean_llm_output(raw_text)
     except Exception as e:
         logger.error("Gemini chat error : %s", e)
 

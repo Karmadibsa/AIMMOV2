@@ -7,34 +7,33 @@ Annonce originale :
 
 Profil de l'acheteur : {profil}
 
-Raisonne en interne sur ces 4 axes avant de répondre :
-1. PRIX : L'écart au DVF est-il significatif ? Calcule la valeur médiane en € (surface × médiane/m²)
-2. PROFIL : Les critères prioritaires de ce profil sont-ils satisfaits ?
-3. RISQUES : Quels éléments de l'annonce peuvent cacher un problème ?
-4. NÉGOCIATION : Quel prix plancher est défendable avec les données DVF ?
+INTERDICTION ABSOLUE : Ne réponds jamais avec des points de suspension "...", du texte générique, ou des crochets vides. Chaque champ de ta réponse doit contenir une valeur réelle calculée depuis les données ci-dessus. Si une donnée manque, estime-la depuis le contexte disponible.
 
-Puis réponds dans ce format exact :
+Raisonne sur ces 4 axes avant de rédiger :
+1. PRIX : Calcule le prix/m² exact (Prix ÷ Surface). Compare-le aux données fournies.
+2. PROFIL : En quoi ce bien répond-il concrètement aux besoins d'un acheteur en "{profil}" ?
+3. RISQUES : Quels signaux d'alerte apparaissent dans les données (DPE, travaux, écart de prix) ?
+4. NÉGOCIATION : Quel montant d'offre est défendable au regard de l'écart au marché ?
 
-[Un paragraphe d'introduction de 2-3 phrases en langage naturel, 
-sans titre ni bullet points, qui mentionne obligatoirement :
-- le prix/m² et l'écart à la médiane en % ET en €
-- ce que ça implique concrètement pour le profil de l'acheteur]
+Rédige ensuite ta fiche d'analyse. Remplace chaque indication entre chevrons par une valeur réelle :
 
 <ANSWER>
 ## 🏠 Opportunité
-**Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
-**Verdict** : Sous-évalué / Dans la norme / Surévalué
+**Prix/m²** : <valeur calculée> €/m² — médiane estimée du secteur : <estimation> €/m² — écart : <pourcentage signé>%
+**Verdict** : <Sous-évalué OU Dans la norme OU Surévalué, avec une justification en une phrase>
 
-## ✅ Points forts
-- Point 1 (avec chiffre)
-- Point 2 (avec chiffre)
+## ✅ Points forts 
+- <point concret chiffré tiré des données, adapté au profil {profil}>
+- <deuxième point concret chiffré tiré des données>
 
 ## ⚠️ Points d'attention
-- Point 1
-- Point 2
+- <premier risque réel identifié dans l'annonce ou les données>
+- <deuxième risque ou incertitude à surveiller>
 
 ## 💡 Recommandation
-**Action** : Acheter / Négocier / Éviter
-**Fourchette de négociation** : entre Xa€ et Xb€
-**Justification** : 2 phrases max, chiffrées
+- **Action** : <Acheter OU Négocier OU Éviter>
+- **Fourchette de négociation** : entre <montant bas en €> et <montant haut en €>
+- **Justification** : <deux phrases chiffrées expliquant pourquoi cette fourchette est défendable au regard du marché>
 </ANSWER>
+
+RÈGLE DE SORTIE : Place l'intégralité de ta fiche finale entre <ANSWER> et </ANSWER>. Ne mets rien d'autre dans ces balises. Les chevrons < > sont des marqueurs à remplacer — ils ne doivent pas apparaître dans ta réponse finale.
