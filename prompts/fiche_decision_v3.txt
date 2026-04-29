@@ -16,8 +16,11 @@ Avant de répondre, raisonne étape par étape en suivant exactement cette séqu
 4. NÉGOCIATION : Quel est le prix plancher raisonnable basé sur les données DVF ?
 </reflexion>
 
-Puis réponds UNIQUEMENT dans ce format :
+Puis enveloppe TOUTE ta réponse finale (les sections ## ci-dessous) entre les balises <ANSWER> et </ANSWER>.
+Le texte à l'intérieur de <reflexion> doit impérativement rester EN DEHORS de la balise <ANSWER>.
+N'écris RIEN après </ANSWER>.
 
+<ANSWER>
 ## 🏠 Opportunité
 **Prix/m²** : X €/m² vs médiane quartier Y €/m² → écart : Z%
 **Verdict** : Sous-évalué / Dans la norme / Surévalué
@@ -34,3 +37,4 @@ Puis réponds UNIQUEMENT dans ce format :
 **Action** : Acheter / Négocier / Éviter
 **Fourchette de négociation** : entre Xa€ et Xb€
 **Justification** : 2 phrases max, chiffrées
+</ANSWER>
