@@ -49,9 +49,7 @@ df_dvf_raw = load_dvf_raw(str(DVF_CSV_PATH))
 # ── Session state ─────────────────────────────────────────────────────────────
 for _k, _v in [("asst_step", 0), ("asst_type", None),
                ("asst_budget", None), ("asst_surface", None),
-
-               ("show_alert_form", False), ("alert_filters_saved", False)]:
-
+               ("show_alert_form", False), ("alert_filters_saved", False),
                ("user_role", "rp"), ("chat_history", None)]:
     if _k not in st.session_state:
         st.session_state[_k] = _v

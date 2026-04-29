@@ -88,7 +88,7 @@ def _clean_llm_output(text: str) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    scheduler.add_job(sync, "cron", hour=7, minute=0)
+    scheduler.add_job(sync, "cron", hour=11, minute=0)
     scheduler.start()
     yield
     scheduler.shutdown()
@@ -586,7 +586,7 @@ def detail_bien(bien_id: str):
 
 @app.post("/alerte")
 def creer_alerte(alerte: AlerteProfil):
-    from .alertes import sauvegarder_profil
+    from .alert import sauvegarder_profil
     from .gmail_service import envoyer_email_gmail
 
     try:
@@ -603,7 +603,39 @@ def creer_alerte(alerte: AlerteProfil):
 
     try:
         # Étape 2 : email de confirmation
-        html_confirmation = f"""..."""  # votre HTML existant
+        p = alerte.profil
+        criteres_html = []
+        if p.budget_max:
+            criteres_html.append(f"<li><strong>Budget max :</strong> {int(p.budget_max):,} €</li>")
+        if p.surface_min:
+            criteres_html.append(f"<li><strong>Surface min :</strong> {int(p.surface_min)} m²</li>")
+        if p.nb_pieces_min:
+            criteres_html.append(f"<li><strong>Pièces min :</strong> {p.nb_pieces_min}</li>")
+        if p.quartiers:
+            criteres_html.append(f"<li><strong>Communes :</strong> {', '.join(p.quartiers)}</li>")
+        if p.description_libre:
+            criteres_html.append(f"<li><strong>Mot-clé :</strong> {p.description_libre}</li>")
+        criteres_block = (
+            "<ul>" + "".join(criteres_html) + "</ul>"
+            if criteres_html else "<p><em>Tous les biens disponibles.</em></p>"
+        )
+
+        html_confirmation = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <h2>🏠 NidBuyer — Alerte enregistrée</h2>
+                <p>Bonjour,</p>
+                <p>Votre alerte <strong>« {alerte.nom_alerte} »</strong> a bien été enregistrée.</p>
+                <p>Vous recevrez un email <strong>chaque jour à 9h30</strong> avec les nouveaux biens correspondant à vos critères :</p>
+                {criteres_block}
+                <hr>
+                <p style="font-size: 12px; color: #999;">
+                    Email automatique de <strong>NidBuyer</strong> —
+                    <a href="https://nidbuyer.aimmo.fr">Gérer vos alertes</a>
+                </p>
+            </body>
+        </html>
+        """
 
         success = envoyer_email_gmail(
             alerte.email,

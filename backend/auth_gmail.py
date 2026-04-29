@@ -14,11 +14,19 @@ from pathlib import Path
 # Charge les variables existantes de .env
 load_dotenv()
 
-# Configuration
-CLIENT_ID = "REDACTED_GMAIL_CLIENT_ID"
-CLIENT_SECRET = os.environ.get("GMAIL_CLIENT_SECRET", "REDACTED_GMAIL_CLIENT_SECRET")
+# Configuration — lit les credentials depuis .env (jamais en dur)
+CLIENT_ID = os.environ.get("GMAIL_CLIENT_ID")
+CLIENT_SECRET = os.environ.get("GMAIL_CLIENT_SECRET")
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
-REDIRECT_URI = "http://localhost:8888/auth_callback"
+# Note : run_local_server(port=8888) envoie toujours http://localhost:8888/
+# (racine, pas /auth_callback) — c'est cette URI qu'il faut déclarer dans
+# Google Cloud Console pour les clients de type "Application Web".
+REDIRECT_URI = "http://localhost:8888/"
+
+if not CLIENT_ID or not CLIENT_SECRET:
+    raise SystemExit(
+        "❌ GMAIL_CLIENT_ID et/ou GMAIL_CLIENT_SECRET manquants dans .env"
+    )
 
 def get_gmail_auth():
     """
@@ -33,7 +41,7 @@ def get_gmail_auth():
             "client_secret": CLIENT_SECRET,
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": ["http://localhost:8888/auth_callback"]
+            "redirect_uris": [REDIRECT_URI]
         }
     }
     
