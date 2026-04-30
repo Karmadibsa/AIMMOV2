@@ -145,8 +145,6 @@ _PROFIL_LABELS = {
     "mixte":        "Immeuble mixte",
 }
 
-_PROMPT_PATH = Path(__file__).parent.parent.parent / "prompts" / "fiche_decision_v3.txt"
-
 
 def _build_fiche(row: pd.Series) -> str:
     lines = []
@@ -311,14 +309,13 @@ def render_list(df: pd.DataFrame, user_role: str = "rp") -> None:
                     _desc_clean = str(row.get("description", "")).strip()
                     if _desc_clean in ("", "nan"):
                         _desc_clean = "Non disponible"
-                    try:
-                        _template = _PROMPT_PATH.read_text(encoding="utf-8")
-                    except FileNotFoundError:
-                        _template = "{fiche_structuree}\n\n{description_annonce}\n\nProfil : {profil}"
-                    _prompt = _template.format(
-                        fiche_structuree=_build_fiche(row),
-                        description_annonce=_desc_clean,
-                        profil=_role_label,
+                    # Le prompt complet est géré dans main.py.
+                    # Le frontend envoie uniquement les données brutes.
+                    _prompt = (
+                        f"Voici les informations sur le bien immobilier :\n\n"
+                        f"{_build_fiche(row)}\n\n"
+                        f"Annonce originale :\n{_desc_clean[:600]}\n\n"
+                        f"Profil de l'acheteur : {_role_label}"
                     )
                     _titre_court = titre[:80] + ("…" if len(titre) > 80 else "")
                     st.session_state["pending_analysis"]       = _prompt
