@@ -23,7 +23,7 @@ from pathlib import Path
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
-from chromadb.utils import embedding_functions
+from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 # ── ChromaDB ──────────────────────────────────────────────────────────────────
 
 CHROMA_PATH      = str(Path(__file__).parent.parent / "chroma_db")
-EMBEDDING_MODEL  = "all-MiniLM-L6-v2"
 COLLECTION_NAME  = "annonces_toulon"
 INDEX_BATCH_SIZE = 100
 
@@ -58,9 +57,7 @@ def _get_client() -> chromadb.ClientAPI:
 def _get_ef():
     global _ef
     if _ef is None:
-        _ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=EMBEDDING_MODEL
-        )
+        _ef = DefaultEmbeddingFunction()
     return _ef
 
 
