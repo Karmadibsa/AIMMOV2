@@ -174,9 +174,10 @@ with st.sidebar:
                 if not email_alerte or "@" not in email_alerte:
                     st.error("❌ Veuillez entrer un email valide")
                 else:
+                    import os as _os
                     import httpx
                     try:
-                        api_url = "http://localhost:8000"
+                        api_url = _os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
                         payload = {
                             "email": email_alerte,
                             "nom_alerte": nom_alerte,
