@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git filter-repo *)",
+      "Bash(pip install *)",
+      "Bash(python -m git_filter_repo --version)",
+      "Read(//c/Users/mompe/AppData/Local/Packages/**)",
+      "Read(//c/Users/mompe/AppData/**)",
+      "Bash(~/AppData/Local/Packages/PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0/LocalCache/local-packages/Python311/Scripts/git-filter-repo.exe --replace-text /tmp/replacements.txt --force)"
+    ]
+  }
+}
